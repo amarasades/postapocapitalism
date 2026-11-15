@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Post-Apocapitalism</title>
+<meta name="description" content="Post-Apocapitalism (PAC). We creater futures.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0B0B0A;
+    --ink: #E8E4DA;
+    --muted: #8F8B82;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, sans-serif;
+  }
+  .page {
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    padding: 28px clamp(20px, 4vw, 56px);
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  header a { color: var(--ink); text-decoration: none; }
+  header a:hover { color: var(--muted); }
+  header span { color: var(--muted); }
+  .hero {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 0;
+  }
+  .hold { width: max-content; max-width: 100%; }
+  h1 {
+    margin: 0;
+    text-align: left;
+    font-size: clamp(76px, 15vw, 232px);
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+    font-weight: 850;
+    font-variation-settings: "wght" 850, "wdth" 70;
+    cursor: crosshair;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+  }
+  h1 .line { display: block; }
+  h1 .ch { display: inline-block; will-change: font-variation-settings; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a href="/">Post-Apocapitalism</a>
+    <span>PAC</span>
+  </header>
+  <main class="hero">
+    <div class="hold" id="hold">
+      <h1 id="title" aria-label="We creater futures.">
+        <span class="line" aria-hidden="true">We</span>
+        <span class="line" aria-hidden="true">creater</span>
+        <span class="line" aria-hidden="true">futures.</span>
+      </h1>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+  // Rest and peak font axes. Letters near the pointer move toward PEAK,
+  // falling off smoothly with distance; far letters stay at REST.
+  const REST = { wght: 850, wdth: 70 };
+  const PEAK = { wght: 160, wdth: 125 };
+  const SPREAD = 0.75;   // falloff radius, in multiples of the font size
+  const EASE = 0.16;     // how quickly letters catch up (0..1 per frame)
+  const IDLE_MS = 1800;  // after this long without a pointer, drift on its own
+
+  const title = document.getElementById('title');
+  const hold = document.getElementById('hold');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // Split each line into per-letter spans.
+  const chars = [];
+  title.querySelectorAll('.line').forEach((line) => {
+    const text = line.textContent;
+    line.textContent = '';
+    for (const c of text) {
+      const s = document.createElement('span');
+      s.className = 'ch';
+      s.textContent = c;
+      line.appendChild(s);
+      chars.push({ el: s, x: 0, y: 0, v: 0 });
+    }
+  });
+
+  let sigma = 100;
+  let pointer = null;      // {x, y} relative to the title, or null
+  let lastMove = -Infinity;
+  let running = false;
+
+  const apply = (c) => {
+    const w = REST.wght + (PEAK.wght - REST.wght) * c.v;
+    const d = REST.wdth + (PEAK.wdth - REST.wdth) * c.v;
+    c.el.style.fontVariationSettings = `"wght" ${w.toFixed(1)}, "wdth" ${d.toFixed(1)}`;
+  };
+
+  // Measure every letter's centre at rest, so the falloff doesn't
+  // chase its own reflow as letters widen.
+  const measure = () => {
+    hold.style.width = '';
+    chars.forEach((c) => { c.v = 0; apply(c); });
+    const box = title.getBoundingClientRect();
+    chars.forEach((c) => {
+      const r = c.el.getBoundingClientRect();
+      c.x = r.left - box.left + r.width / 2;
+      c.y = r.top - box.top + r.height / 2;
+    });
+    // Lock the block's width so centring doesn't shift as letters grow.
+    hold.style.width = box.width + 'px';
+    sigma = parseFloat(getComputedStyle(title).fontSize) * SPREAD;
+  };
+
+  const driftPoint = (t) => {
+    const box = title.getBoundingClientRect();
+    return {
+      x: box.width * (0.5 + 0.48 * Math.cos(t * 0.00031)),
+      y: box.height * (0.5 + 0.42 * Math.sin(t * 0.00053)),
+    };
+  };
+
+  const frame = (t) => {
+    let target = pointer;
+    const idle = !pointer && t - lastMove > IDLE_MS;
+    if (idle && !reduce.matches) target = driftPoint(t);
+
+    let busy = !!target;
+    const s2 = 2 * sigma * sigma;
+    chars.forEach((c) => {
+      let goal = 0;
+      if (target) {
+        const dx = c.x - target.x, dy = c.y - target.y;
+        goal = Math.exp(-(dx * dx + dy * dy) / s2);
+      }
+      const next = c.v + (goal - c.v) * EASE;
+      if (Math.abs(next - c.v) > 0.0005) busy = true;
+      c.v = next;
+      apply(c);
+    });
+
+    if (busy || !reduce.matches) requestAnimationFrame(frame);
+    else running = false;
+  };
+
+  const start = () => {
+    if (!running) { running = true; requestAnimationFrame(frame); }
+  };
+
+  const toLocal = (e) => {
+    const box = title.getBoundingClientRect();
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
+  };
+  title.addEventListener('pointermove', (e) => {
+    pointer = toLocal(e);
+    lastMove = performance.now();
+    start();
+  });
+  const release = () => { pointer = null; lastMove = performance.now(); start(); };
+  title.addEventListener('pointerleave', release);
+  title.addEventListener('pointercancel', release);
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(measure, 120);
+  });
+  reduce.addEventListener?.('change', start);
+
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+    measure();
+    start();
+  });
+})();
+</script>
+</body>
+</html>
