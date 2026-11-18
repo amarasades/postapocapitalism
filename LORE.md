@@ -74,6 +74,7 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 
 ## 7. Website concept
 
+- **Hero copy:** "Software that wastes less, lasts longer, and keeps culture alive. For Music, Fashion, Film, and whatever's next."
 - **Hero:** "We / create / futures." Left-aligned, one word per row.
 - **Telemetry readout = the AI's inheritance**, the future it's cancelling: year, temperature (46°C), AQI (312), biosphere, grid (rationed), signal. Optionally it **flickers between the future and today's figures**, two timelines with the company sitting in the gap.
 - **Lore:** heavily hinted on the main site. A **hidden page** (`/origin`, "transmission") is still an option for people who dig.
