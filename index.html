@@ -49,12 +49,17 @@
 
   /* ---------- weathered glass ---------- */
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
-    background: linear-gradient(160deg, var(--glass-hi), var(--glass) 45%, rgba(255,240,220,.12));
-    backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border: 1px solid var(--edge);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 20px 50px -24px rgba(60, 20, 5, .55); }
-  .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .28; mix-blend-mode: soft-light;
+    background: linear-gradient(160deg, rgba(255,248,238,.16), rgba(255,240,220,.05) 45%, rgba(255,240,220,.08));
+    backdrop-filter: blur(5px) saturate(160%); -webkit-backdrop-filter: blur(5px) saturate(160%);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.75), inset 0 -1px 1px rgba(255,255,255,.22), inset 0 0 24px rgba(255,250,240,.14), 0 18px 44px -22px rgba(60, 20, 5, .5); }
+  /* specular rim: bright where the light hits, almost gone on the sides */
+  .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; padding: 1.2px;
+    background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(255,255,255,.18) 28%, rgba(255,255,255,0) 50%, rgba(255,255,255,.2) 78%, rgba(255,255,255,.7));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
+  /* the telemetry needs a little more body to stay readable over the orrery */
+  .tele { background: linear-gradient(160deg, rgba(255,248,238,.3), rgba(255,240,220,.16) 45%, rgba(255,240,220,.2)); }
   .bar { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--ink-line); background: rgba(26,18,13,.06); }
   .bar .id { padding-right: 14px; border-right: 1px solid var(--ink-line); color: var(--ink-dim); }
   .bar .sp { flex: 1; }
@@ -84,13 +89,16 @@
   .scroll i { width: 1px; height: 34px; background: linear-gradient(var(--ink), transparent); animation: blink 2s infinite; }
 
   /* orbital linework drawn in soot */
-  .orbit { position: absolute; z-index: -1; right: -4%; top: 50%; transform: translateY(-50%); width: min(820px, 70vw); pointer-events: none; opacity: .8; }
+  .orbit { position: absolute; z-index: -1; left: 0; top: 0; width: 820px; pointer-events: none; opacity: .85; }
   .orbit svg { width: 100%; height: auto; display: block; }
   .spin { transform-box: view-box; transform-origin: 300px 300px; }
   .spin.a { animation: spin 140s linear infinite; }
   .spin.b { animation: spin 80s linear infinite reverse; }
   .spin.c { animation: spin 45s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .o-sun { filter: drop-shadow(0 0 8px rgba(255,236,200,.95)); }
+  .o-pulse { transform-box: fill-box; transform-origin: center; animation: opulse 3s ease-out infinite; }
+  @keyframes opulse { 0% { transform: scale(.7); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
 
   /* ---------- telemetry: a weather app for the inherited future ---------- */
   .tele { --r: 28px; user-select: none; -webkit-tap-highlight-color: transparent; cursor: crosshair; }
@@ -200,7 +208,6 @@
     .hero { min-height: 0; padding-top: 24px; }
     .hero-grid { grid-template-columns: 1fr; gap: 24px; }
     .hero-grid h1 { min-height: calc(100svh - 150px); display: flex; flex-direction: column; justify-content: center; padding-top: 5svh; }
-    .orbit { top: calc(50svh - 40px) !important; }
     .orbit { right: -45%; width: 130vw; opacity: .5; }
     .paper { grid-template-columns: 1fr; }
     .sec-head .hud { text-align: left; }
@@ -221,7 +228,7 @@
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
+  <defs id="lg-defs">
     <filter id="decay" x="-20%" y="-20%" width="140%" height="140%">
       <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="n"/>
       <feDisplacementMap in="SourceGraphic" in2="n" scale="30" xChannelSelector="R" yChannelSelector="G" result="d"/>
@@ -254,16 +261,16 @@
 
 <header class="hero">
   <div class="orbit" aria-hidden="true">
-    <svg viewBox="0 0 600 600" fill="none" stroke="#1a120d">
-      <g class="spin a"><circle cx="300" cy="300" r="290" stroke-opacity=".4" stroke-dasharray="1 7"/></g>
-      <circle cx="300" cy="300" r="262" stroke-opacity=".25"/>
-      <g class="spin b"><circle cx="300" cy="300" r="246" stroke-width="4" stroke-opacity=".35" stroke-dasharray="90 60 30 220 140 400"/></g>
-      <circle cx="300" cy="300" r="200" stroke-opacity=".18"/>
-      <g class="spin a" id="spokes" stroke-opacity=".16"></g>
-      <circle cx="300" cy="300" r="122" stroke-opacity=".3"/>
-      <g class="spin c"><circle cx="300" cy="300" r="70" stroke="#fff3e0" stroke-width="2" stroke-opacity=".9" stroke-dasharray="200 40 60 140"/></g>
-      <circle cx="300" cy="300" r="40" stroke-opacity=".4"/>
-      <g class="spin b" id="nodes"></g>
+    <svg viewBox="0 0 600 600" fill="none" stroke="#1a120d" font-family="Chakra Petch, monospace">
+      <g class="spin a"><circle cx="300" cy="300" r="296" stroke-opacity=".35" stroke-dasharray="1 6"/></g>
+      <g id="o-ticks"></g>
+      <g id="o-orbits"></g>
+      <g id="o-drift"></g>
+      <g class="spin c"><circle cx="300" cy="300" r="20" stroke-opacity=".4" stroke-dasharray="2 4"/></g>
+      <circle cx="300" cy="300" r="13" stroke-opacity=".3"/>
+      <circle cx="300" cy="300" r="6.5" fill="#fff3e0" stroke="none" class="o-sun"/>
+      <g id="o-ghosts"></g>
+      <g id="o-planets"></g>
     </svg>
   </div>
 
@@ -272,6 +279,8 @@
       <span>Origin <b>2133</b></span>
       <span>Timeline <b>Inherited</b></span>
       <span><i class="dot"></i><b>Signal live</b></span>
+      <span>UTC <b id="m-utc">··:··:··</b></span>
+      <span>Sun–Earth <b id="m-km">···</b></span>
     </div>
     <div class="hero-grid">
       <h1><span>We</span><span>create</span><span>futures.</span></h1>
@@ -306,7 +315,7 @@
       </aside>
     </div>
     <div class="hero-foot">
-      <p>Software that wastes less, lasts longer, and keeps culture alive. For fashion houses, 3D artists, DJs, and whoever's next.</p>
+      <p>Software that wastes less, lasts longer, and keeps culture alive. For Music, Fashion, Film, and whatever's next.</p>
       <a href="#modules" class="scroll hud"><i></i>Scroll</a>
     </div>
   </div>
@@ -457,20 +466,103 @@
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   console.log("%chello from later.", "font: 600 14px monospace; color: #b9592a");
 
-  /* ---------- orbit linework ---------- */
+  /* ---------- the solar system, live: real positions now, ghosts in 2133 ---------- */
   const NS = "http://www.w3.org/2000/svg";
   const mk = (tag, a, p) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
-  const spokes = $("spokes");
-  for (let i = 0; i < 36; i++) {
-    const a = i / 36 * Math.PI * 2, r = 246;
-    mk("path", { d: `M300 300 Q ${(300 + Math.cos(a - .9) * r * .55).toFixed(1)} ${(300 + Math.sin(a - .9) * r * .55).toFixed(1)} ${(300 + Math.cos(a) * r).toFixed(1)} ${(300 + Math.sin(a) * r).toFixed(1)}`, "stroke-dasharray": i % 3 ? "" : "1 4" }, spokes);
+  // JPL approximate Keplerian elements (J2000) and rates per century:
+  // a, e, I, L, long. perihelion, long. node  +  display radius, dot size, label
+  const PLANETS = [
+    ["MER", [0.38709927, 0.00000037], [0.20563593, 0.00001906], [7.00497902, -0.00594749], [252.25032350, 149472.67411175], [77.45779628, 0.16047689], [48.33076593, -0.12534081], 40, 2.2],
+    ["VEN", [0.72333566, 0.00000390], [0.00677672, -0.00004107], [3.39467605, -0.00078890], [181.97909950, 58517.81538729], [131.60246718, 0.00268329], [76.67984255, -0.27769418], 64, 3],
+    ["EARTH", [1.00000261, 0.00000562], [0.01671123, -0.00004392], [-0.00001531, -0.01294668], [100.46457166, 35999.37244981], [102.93768193, 0.32327364], [0, 0], 90, 3.6],
+    ["MAR", [1.52371034, 0.00001847], [0.09339410, 0.00007882], [1.84969142, -0.00813131], [-4.55343205, 19140.30268499], [-23.94362959, 0.44441088], [49.55953891, -0.29257343], 116, 2.6],
+    ["JUP", [5.20288700, -0.00011607], [0.04838624, -0.00013253], [1.30439695, -0.00183714], [34.39644051, 3034.74612775], [14.72847983, 0.21252668], [100.47390909, 0.20469106], 160, 5],
+    ["SAT", [9.53667594, -0.00125060], [0.05386179, -0.00050991], [2.48599187, 0.00193609], [49.95424423, 1222.49362201], [92.59887831, -0.41897216], [113.66242448, -0.28867794], 200, 4.4],
+    ["URA", [19.18916464, -0.00196176], [0.04725744, -0.00004397], [0.77263783, -0.00242939], [313.23810451, 428.48202785], [170.95427630, 0.40805281], [74.01692503, 0.04240589], 236, 3.4],
+    ["NEP", [30.06992276, 0.00026291], [0.00859048, 0.00005105], [1.77004347, 0.00035372], [-55.12002969, 218.45945325], [44.96476227, -0.32241464], [131.78422574, -0.00508664], 268, 3.4]
+  ];
+  const RAD = Math.PI / 180;
+  function helio(p, ms) {
+    const T = (ms / 86400000 + 2440587.5 - 2451545) / 36525, el = i => p[i][0] + p[i][1] * T;
+    const a = el(1), e = el(2), I = el(3) * RAD, L = el(4), wb = el(5), O = el(6);
+    const w = (wb - O) * RAD, Om = O * RAD;
+    let M = ((L - wb) % 360 + 540) % 360 - 180; M *= RAD;
+    let E = M + e * Math.sin(M);
+    for (let i = 0; i < 6; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    const xp = a * (Math.cos(E) - e), yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const x = (Math.cos(w) * Math.cos(Om) - Math.sin(w) * Math.sin(Om) * Math.cos(I)) * xp + (-Math.sin(w) * Math.cos(Om) - Math.cos(w) * Math.sin(Om) * Math.cos(I)) * yp;
+    const y = (Math.cos(w) * Math.sin(Om) + Math.sin(w) * Math.cos(Om) * Math.cos(I)) * xp + (-Math.sin(w) * Math.sin(Om) + Math.cos(w) * Math.cos(Om) * Math.cos(I)) * yp;
+    return { lon: Math.atan2(y, x), dist: Math.hypot(x, y) };
   }
-  const nodes = $("nodes");
-  [[262, .3], [262, 2.4], [200, 1.2], [200, 4.1], [122, 5.2], [290, 3.6]].forEach(([r, a], i) => {
-    const x = 300 + Math.cos(a) * r, y = 300 + Math.sin(a) * r;
-    mk("circle", { cx: x, cy: y, r: i % 2 ? 9 : 6, "stroke-opacity": .5 }, nodes);
-    mk("circle", { cx: x, cy: y, r: 2.6, fill: "#fff3e0", stroke: "none" }, nodes);
+  const at = (rd, lon) => [300 + rd * Math.cos(lon), 300 - rd * Math.sin(lon)]; // looking down from ecliptic north
+  // static linework: degree ticks and orbits
+  const ticks = $("o-ticks");
+  for (let d = 0; d < 360; d += 5) {
+    const long = d % 30 === 0, [x1, y1] = at(long ? 279 : 284, d * RAD), [x2, y2] = at(289, d * RAD);
+    mk("line", { x1, y1, x2, y2, "stroke-opacity": long ? .5 : .25 }, ticks);
+    if (d % 90 === 0) { const [tx, ty] = at(270, d * RAD); mk("text", { x: tx, y: ty + 3, "text-anchor": "middle", fill: "#1a120d", "fill-opacity": .5, stroke: "none", "font-size": 8, "letter-spacing": 1 }, ticks).textContent = d + "°"; }
+  }
+  const orbits = $("o-orbits");
+  PLANETS.forEach(p => mk("circle", { cx: 300, cy: 300, r: p[7], "stroke-opacity": p[0] === "EARTH" ? .5 : .2, "stroke-dasharray": p[7] > 150 ? "2 4" : "" }, orbits));
+  // moving parts
+  const pl = $("o-planets"), gh = $("o-ghosts"), drift = $("o-drift");
+  const parts = PLANETS.map(p => {
+    const earth = p[0] === "EARTH", g = mk("g", {}, pl);
+    const ring = earth ? mk("circle", { r: 10, "stroke-opacity": .6, class: "o-pulse" }, g) : null;
+    const moonOrbit = earth ? mk("circle", { r: 15, "stroke-opacity": .25, "stroke-dasharray": "1 3" }, g) : null;
+    const moon = earth ? mk("circle", { r: 1.4, fill: "#1a120d", stroke: "none" }, g) : null;
+    const dot = mk("circle", { r: p[8], fill: earth ? "#fff3e0" : "#1a120d", stroke: earth ? "#1a120d" : "none", "stroke-width": 1 }, g);
+    const lbl = mk("text", { fill: "#1a120d", "fill-opacity": earth ? .85 : .5, stroke: "none", "font-size": earth ? 9 : 7.5, "letter-spacing": 1.2, "font-weight": earth ? 600 : 400 }, g);
+    lbl.textContent = p[0];
+    const ghost = mk("circle", { r: p[8] + 2.5, "stroke-opacity": .55, "stroke-dasharray": "1.5 2" }, gh);
+    const glbl = earth ? mk("text", { fill: "#1a120d", "fill-opacity": .6, stroke: "none", "font-size": 7.5, "letter-spacing": 1.2 }, gh) : null;
+    if (glbl) glbl.textContent = "2133";
+    const arc = p[7] > 150 ? mk("path", { "stroke-opacity": .45, "stroke-dasharray": "1 3" }, drift) : null;
+    return { p, earth, ring, moonOrbit, moon, dot, lbl, ghost, glbl, arc };
   });
+  const pad = n => String(n).padStart(2, "0");
+  function orrery() {
+    const now = Date.now(), d = new Date(now);
+    const ghostMs = Date.UTC(2133, d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+    let earthNow;
+    parts.forEach(o => {
+      const h = helio(o.p, now), g = helio(o.p, ghostMs), rd = o.p[7];
+      const [x, y] = at(rd, h.lon), [gx, gy] = at(rd, g.lon);
+      o.dot.setAttribute("cx", x); o.dot.setAttribute("cy", y);
+      const out = [Math.cos(h.lon), -Math.sin(h.lon)];
+      o.lbl.setAttribute("x", x + out[0] * (o.p[8] + 9)); o.lbl.setAttribute("y", y + out[1] * (o.p[8] + 9) + 3);
+      o.lbl.setAttribute("text-anchor", out[0] > .3 ? "start" : out[0] < -.3 ? "end" : "middle");
+      o.ghost.setAttribute("cx", gx); o.ghost.setAttribute("cy", gy);
+      if (o.glbl) { o.glbl.setAttribute("x", gx - out[0] * 14); o.glbl.setAttribute("y", gy - out[1] * 14 + 3); o.glbl.setAttribute("text-anchor", "middle"); }
+      if (o.arc) { // how far the outer planets drift by 2133
+        let dl = g.lon - h.lon; dl = Math.atan2(Math.sin(dl), Math.cos(dl));
+        o.arc.setAttribute("d", `M ${x} ${y} A ${rd} ${rd} 0 0 ${dl > 0 ? 0 : 1} ${gx} ${gy}`);
+      }
+      if (o.earth) {
+        earthNow = h;
+        o.ring.setAttribute("cx", x); o.ring.setAttribute("cy", y); o.moonOrbit.setAttribute("cx", x); o.moonOrbit.setAttribute("cy", y);
+        // the moon: mean elongation is enough at this scale
+        const days = now / 86400000 + 2440587.5 - 2451545, ml = (218.316 + 13.176396 * days) * RAD;
+        o.moon.setAttribute("cx", x + Math.cos(ml) * 15); o.moon.setAttribute("cy", y - Math.sin(ml) * 15);
+      }
+    });
+    $("m-utc").textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    $("m-km").textContent = Math.round(earthNow.dist * 149597870.7).toLocaleString("en-US").replace(/,/g, " ") + " km";
+  }
+  orrery(); setInterval(orrery, 1000);
+  // put the sun in the open space: between "We" and the forecast on desktop, above the headline on phones
+  function placeOrrery() {
+    const o = document.querySelector(".orbit"), hr = document.querySelector(".hero").getBoundingClientRect();
+    const we = document.querySelector("h1 span").getBoundingClientRect(), meta = document.querySelector(".hero-meta").getBoundingClientRect();
+    const mobile = innerWidth <= 900, W = mobile ? innerWidth * 1.5 : Math.min(820, innerWidth * .6);
+    let cx, cy;
+    if (mobile) { cx = innerWidth * .64; cy = (meta.bottom + we.top) / 2 - hr.top; }
+    else { const tr = $("tele").getBoundingClientRect(); cx = (we.right + tr.left) / 2 - hr.left; cy = Math.max(meta.bottom - hr.top + 30, tr.top - hr.top - 70); }
+    o.style.width = W + "px"; o.style.left = (cx - W / 2) + "px"; o.style.top = (cy - W / 2) + "px";
+  }
+  placeOrrery(); addEventListener("resize", placeOrrery);
+  if (document.fonts) document.fonts.ready.then(placeOrrery);
+
   const wave = $("wave"); let t = 0;
   const drawWave = () => { let d = "M112 76"; for (let x = 112; x <= 188; x += 3) d += ` L${x} ${(76 + Math.sin(x * .35 + t) * 10 * Math.sin((x - 112) / 76 * Math.PI) * (.6 + .4 * Math.sin(t * .7 + x))).toFixed(1)}`; wave.setAttribute("d", d); };
   drawWave(); if (!reduce) setInterval(() => { t += .25; drawWave(); }, 60);
@@ -528,7 +620,7 @@
     views = {
       future: {
         mode: "Forecast // inherited", year: year ?? "████", city, sub: year ? `${cc} · Unlivable by ${year}` : `${cc} · ████`, ico: S.loc ? fCond[0] : "lost",
-        temp: fTemp ?? "██", cond: fTemp != null ? `<b>${fCond[1]}</b>Feels like ${fTemp + 7 + h % 6}°` : `<b>${fCond[1]}</b>`,
+        temp: fTemp ?? "··", cond: fTemp != null ? `<b>${fCond[1]}</b>Feels like ${fTemp + 7 + h % 6}°` : `<b>${fCond[1]}</b>`,
         segs: 10, over: fAqi >= 500, aqi: fAqi, aqiS: fAqi >= 500 ? "Lethal" : "Hazardous",
         rings, bio: `${Math.round(rings.reduce((a, b) => a + b) / 3)}%`, bioS: "Left",
         grid: "Collapsed", gridS: year ? String(year - 6) : "",
@@ -625,6 +717,82 @@
     build(); tele.classList.remove("resolving"); render(); requestAnimationFrame(() => damage());
   }
 
+  /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
+  const LG = (() => {
+    const ua = navigator.userAgent;
+    if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua)) return null;
+    document.documentElement.classList.add("lg");
+    const defs = $("lg-defs");
+    // displacement map: every pixel near an edge samples the backdrop from further inside, like a lens
+    function lens(w, h, r, chip) {
+      const cvs = document.createElement("canvas"); cvs.width = w; cvs.height = h;
+      const ctx = cvs.getContext("2d"), img = ctx.createImageData(w, h), D = img.data;
+      const B = Math.max(10, Math.min(24, Math.min(w, h) * .32)), cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
+      let bb = null, segs = null, poly = null;
+      if (chip) {
+        poly = chip; segs = [];
+        for (let i = 0; i < chip.length - 1; i++) segs.push([chip[i], chip[i + 1]]);
+        const xs = chip.map(p => p[0]), ys = chip.map(p => p[1]);
+        bb = [Math.min(...xs) - B, Math.min(...ys) - B, Math.max(...xs) + B, Math.max(...ys) + B];
+      }
+      const inside = (x, y) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const px = x + .5, py = y + .5, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
+        let d, nx, ny;
+        if (qx > 0 && qy > 0) { const L = Math.hypot(qx, qy) || 1; d = r - L; nx = qx / L * Math.sign(px - cx); ny = qy / L * Math.sign(py - cy); }
+        else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
+        else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
+        if (bb && px > bb[0] && px < bb[2] && py > bb[1] && py < bb[3]) {
+          if (inside(px, py)) { d = 1e9; }
+          else for (const [[ax, ay], [bx, by]] of segs) {
+            const vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy || 1)));
+            const ex = ax + vx * t - px, ey = ay + vy * t - py, dc = Math.hypot(ex, ey);
+            if (dc < d) { d = dc; nx = ex / (dc || 1); ny = ey / (dc || 1); }
+          }
+        }
+        const k = (y * w + x) * 4;
+        let m = 0; if (d < B) { const t = 1 - d / B; m = t * t * (3 - 2 * t) * t; }
+        D[k] = 128 - nx * m * 127; D[k + 1] = 128 - ny * m * 127; D[k + 2] = 128; D[k + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      return cvs.toDataURL();
+    }
+    function filter(id, w, h, href, scale) {
+      const f = mk("filter", { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" }, defs);
+      mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map" }, f);
+      // split the channels and bend each by a slightly different amount: dispersion at the rim
+      [["R", scale, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale * .93, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .86, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+        mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
+        mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
+      });
+      mk("feBlend", { in: "cR", in2: "cG", mode: "screen", result: "rg" }, f);
+      mk("feBlend", { in: "rg", in2: "cB", mode: "screen", result: "rgb" }, f);
+      mk("feGaussianBlur", { in: "rgb", stdDeviation: .7, result: "soft" }, f);
+      mk("feColorMatrix", { in: "soft", type: "saturate", values: 1.35 }, f);
+      return `url(#${id})`;
+    }
+    let n = 0;
+    function apply(el, chip) {
+      const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight); if (!w || !h) return;
+      const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
+      // build the new filters first, swap, then drop the old ones, so the glass never flashes
+      const id = "lg" + n++, old = el._lgIds || [];
+      const scale = Math.min(70, Math.max(30, Math.min(w, h) * .45));
+      el._lgBase = filter(id, w, h, lens(w, h, r, null), scale);
+      el._lgChip = chip ? filter(id + "c", w, h, lens(w, h, r, chip), scale) : null;
+      el._lgIds = chip ? [id, id + "c"] : [id];
+      show(el);
+      requestAnimationFrame(() => old.forEach(o => $(o)?.remove()));
+    }
+    function show(el) {
+      const v = el === tele && mode === "future" && el._lgChip ? el._lgChip : el._lgBase;
+      if (v) { el.style.backdropFilter = v; el.style.webkitBackdropFilter = v; }
+    }
+    const ro = "ResizeObserver" in window ? new ResizeObserver(es => es.forEach(e => e.target !== tele && apply(e.target))) : null;
+    document.querySelectorAll(".glass").forEach(el => { if (el !== tele) { apply(el); ro?.observe(el); } });
+    return { apply, show };
+  })();
+
   /* ---------- damage: only the inherited glass is broken ---------- */
   const cv = tele.querySelector(".scratches");
   let biteClip = "none";
@@ -647,46 +815,34 @@
       }
     });
 
-    /* 2. a chip knocked out of the bottom-right corner, taking the end of the grid's year with it */
+    /* 2. a chip knocked out of the bottom-right corner, taking the end of the grid's year with it.
+          the glass itself does the work: the edge refracts (see liquid glass below); we only add the light on its lip */
     const tr = tele.getBoundingClientRect(), gs = $("t-grid-s").getBoundingClientRect();
     const gx = gs.left - tr.left, gy = gs.top - tr.top, gw = Math.max(gs.width, 30), gh = Math.max(gs.height, 13);
-    const P0 = [w, gy - 6], P1 = [gx + gw * .5, gy + gh * .55], P2 = [gx + gw * .1, gy + gh + 14], P3 = [Math.min(gx - 6, w - 70), h];
-    const V = [P0, P1, P2, P3], BULGE = [-.16, .1, -.22];
+    const P0 = [w, gy - 8], P1 = [gx + gw * .45, gy + gh * .6], P2 = [gx + gw * .05, gy + gh + 12], P3 = [Math.min(gx - 10, w - 74), h];
+    const V = [P0, P1, P2, P3], BULGE = [.2, -.05, .18];
     const edge = new Path2D(); edge.moveTo(...V[0]);
-    const ctrl = [];
+    const ctrl = [], samples = [P0];
     for (let i = 1; i < V.length; i++) {
       const [ax, ay] = V[i - 1], [bx, by] = V[i], mx = (ax + bx) / 2, my = (ay + by) / 2, nx = -(by - ay), ny = bx - ax, L = Math.hypot(nx, ny) || 1, bulge = BULGE[i - 1] * Math.hypot(bx - ax, by - ay);
       const cp = [mx + nx / L * bulge, my + ny / L * bulge]; ctrl.push(cp); edge.quadraticCurveTo(...cp, bx, by);
+      for (let t = .1; t <= 1.001; t += .1) samples.push([(1 - t) ** 2 * ax + 2 * (1 - t) * t * cp[0] + t * t * bx, (1 - t) ** 2 * ay + 2 * (1 - t) * t * cp[1] + t * t * by]);
     }
-    // glass has thickness: a pale green-white edge face, a refraction band, then the specular lip
-    c.strokeStyle = "rgba(206,240,232,.22)"; c.lineWidth = 10; c.stroke(edge);
-    c.strokeStyle = "rgba(230,252,247,.4)"; c.lineWidth = 4.5; c.stroke(edge);
-    c.save(); c.translate(-4, -4); c.strokeStyle = DARK(.2); c.lineWidth = 1; c.stroke(edge); c.restore();
-    c.save(); c.translate(-5.5, -5.5); c.strokeStyle = LIGHT(.24); c.lineWidth = .6; c.stroke(edge); c.restore();
-    c.strokeStyle = LIGHT(.95); c.lineWidth = 1.1; c.stroke(edge);
-    // shell marks fanning into the glass from where it was hit
-    for (let j = 1; j <= 5; j++) {
-      c.beginPath(); c.arc(P1[0] + 3, P1[1] + 3, 3 + j * 3.6, Math.PI * 1.05, Math.PI * 1.6);
-      c.strokeStyle = LIGHT((.34 - j * .055).toFixed(2)); c.lineWidth = .6; c.stroke();
+    // the lip catches the light; a second, fainter line is the far side of the glass seen through its own thickness
+    c.save(); c.translate(-2.5, -2.5); c.strokeStyle = LIGHT(.28); c.lineWidth = .7; c.stroke(edge); c.restore();
+    c.strokeStyle = LIGHT(.92); c.lineWidth = 1; c.stroke(edge);
+    // faint shell ripples where it was struck
+    for (let j = 1; j <= 4; j++) {
+      c.beginPath(); c.arc(P1[0] + 2, P1[1] + 2, 3 + j * 3.4, Math.PI * 1.05, Math.PI * 1.6);
+      c.strokeStyle = LIGHT((.22 - j * .04).toFixed(2)); c.lineWidth = .5; c.stroke();
     }
-    // two short cracks running off the chip
-    const crack = (pts, a) => {
-      [[DARK(a * .5), .7, 1], [LIGHT(a), 0, .65]].forEach(([col, o, lw]) => {
-        c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x + o, y + o) : c.moveTo(x + o, y + o)); c.strokeStyle = col; c.lineWidth = lw; c.stroke();
-      });
-      pts.slice(1, -1).forEach(([x, y]) => { const g = c.createRadialGradient(x, y, 0, x, y, 3.5); g.addColorStop(0, LIGHT(.9)); g.addColorStop(1, LIGHT(0)); c.fillStyle = g; c.beginPath(); c.arc(x, y, 3.5, 0, 7); c.fill(); });
-    };
-    [[P1, -2.4, 70], [P2, -2.9, 55]].forEach(([[x, y], a, L]) => {
-      const pts = [[x, y]]; let ang = a + rr(-.1, .1), px = x, py = y;
-      for (let s = 0; s < 3; s++) { const seg = L * rr(.25, .42); px += Math.cos(ang) * seg; py += Math.sin(ang) * seg; pts.push([px, py]); ang += rr(-.45, .45); }
-      crack(pts, .7);
-    });
     biteClip = `path('M 28 0 H ${w - 28} A 28 28 0 0 1 ${w} 28 L ${P0[0]} ${P0[1].toFixed(1)} ` +
       V.slice(1).map(([x, y], i) => `Q ${ctrl[i][0].toFixed(1)} ${ctrl[i][1].toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ") +
       ` H 28 A 28 28 0 0 1 0 ${h - 28} V 28 A 28 28 0 0 1 28 0 Z')`;
+    if (LG) LG.apply(tele, [...samples, [w, h]]);
     applyClip();
   }
-  function applyClip() { tele.style.clipPath = mode === "future" ? biteClip : "none"; }
+  function applyClip() { tele.style.clipPath = mode === "future" ? biteClip : "none"; if (LG) LG.show(tele); }
   damage();
   if ("ResizeObserver" in window) new ResizeObserver(damage).observe(tele);
   if (document.fonts) document.fonts.ready.then(() => damage()); // the chip is placed against text, so re-cut once fonts land

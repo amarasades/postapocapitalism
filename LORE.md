@@ -86,6 +86,8 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
   - **Biosphere:** three activity-style rings (flora, fauna, ocean). In 2133 they're red and nearly empty ("2% Left"); in 2026 they're full and coloured ("Intact, for now").
   - **Grid:** a 24-hour strip of power. 2133 is a dead flatline, "Collapsed ████", with **the chip in the glass covering the end of the year**. 2026 is lit all day, "Online 24/7".
 - **The 2133-side glass is damaged:** light wear scratches and a small chip knocked out of the bottom-right corner (actually cut away). It has a glass edge face, shell-shaped ripples and two short cracks. **The 2026 side is clean and whole.**
+- **The hero background is the solar system, live** (decided: option 2 below). The planets are drawn at their **real positions right now**, worked out in the browser from JPL's approximate orbital elements (no API). There's a degree ring, and the Earth has a pulse ring and a live Moon. **Dashed ghosts mark where every planet will be on this same date in 2133**: Earth's ghost lands almost exactly on top of itself (same place, different world), and the outer planets drift along dotted arcs. The info row at the top shows UTC time and the Sun–Earth distance in km, ticking every second. It's positioned so the Sun sits in open space (between "We" and the forecast on desktop, above the headline on phones).
+- **Glass is real liquid glass** (Chromium browsers): an SVG displacement map refracts the background at every curved edge like a lens, with a slight colour split (red, green and blue bent by different amounts) and only light blur, plus a specular rim. The chip in the 2133 panel is built into the same map, so the broken edge refracts too. Safari and Firefox get clear glass with a light blur.
 - **On phones,** the first screen is just "We create futures." with the sun and the orbit diagram. The forecast panel comes after you scroll.
 - **Hover or tap glitches between the two timelines.** 2026 shows the real weather, AQI, "Intact, for now", "Online". Footer: "This is the one you can still change."
 - If the location can't be found: "Signal lost", and everything is redacted (████).
@@ -97,7 +99,22 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 - **Origin year: 2133**, fixed. The **panel's year** ("Unlivable by") and the conditions change with the visitor's location (see Telemetry above).
 - **Lore exposure:** **heavily hinted.** The site never states it outright.
 
-## 9. Open questions
+## 9. Ideas backlog (not built)
+
+### Hero diagram: option 1, "the planet as a live instrument"
+A layered device, like the sci-fi screen-interface references:
+- **Core:** a wireframe Earth rotating in real time, with the real day/night line and a dot pinging **the visitor's location**, connected by a thin line out to the forecast panel ("LOC.ANALYSIS", made real).
+- **Middle ring:** the planet's vital signs as arcs and tick marks: earthquakes in the last 24 hours (USGS feed), today's CO₂ ppm, solar wind. In the lore, **this is how the AI listens to the planet's consciousness.**
+- **Outer ring:** a live solar system (what's built now), plus **an inbound object on a long curved path**: the AI arriving.
+- Risk: three live feeds means three things that can fail. Check which ones a website is allowed to call directly before building.
+
+### Hero diagram: option 4, "Earth's heartbeat"
+A circular waveform around the core, driven by live earthquake and solar-wind data, pulsing. Minimal and hypnotic, and the most "planet consciousness" of the options. It could become the middle ring of option 1.
+
+### Hero diagram: option 3, "timelines as orbits" (also considered)
+Rings are decades from 2026 to 2133. The visitor's "unlivable" year is marked on its ring, a second spiral peels off as the new timeline, and products and log entries are nodes on it.
+
+## 10. Open questions
 
 1. **Worshippers vs customers:** creepy, hopeful, or both? (Section 3.)
 2. **Relationship with the planet's consciousness.** (Section 3.)
