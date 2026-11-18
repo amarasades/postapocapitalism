@@ -99,4 +99,4 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 
 ---
 
-*Note: this file is in a public repo and is served by GitHub Pages at `postapocapitalism.org/LORE.md`. Anyone can read it. If the lore should stay hidden, move it to a private repo.*
+*Note: this file is public on purpose. It's served at `postapocapitalism.org/LORE.md`. Anyone who finds it is in on it.*
