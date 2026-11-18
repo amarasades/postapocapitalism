@@ -76,16 +76,26 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 
 - **Hero:** "We / create / futures." Left-aligned, one word per row.
 - **Telemetry readout = the AI's inheritance**, the future it's cancelling: year, temperature (46°C), AQI (312), biosphere, grid (rationed), signal. Optionally it **flickers between the future and today's figures**, two timelines with the company sitting in the gap.
-- **Lore:** hinted on the main site. Possibly a **hidden page** (`/origin`, "transmission") for people who dig. *(Recommended, not yet decided.)*
+- **Lore:** heavily hinted on the main site. A **hidden page** (`/origin`, "transmission") is still an option for people who dig.
 
-## 8. Open questions
+### Telemetry: how it works (canon, built)
+- **Every visitor gets their own inherited future.** The year, temperature, AQI, biosphere and grid are worked out from **where the visitor is**, based on their IP address.
+- **The year** is when that location's summer peak would hit **48°C** under a runaway warming rate. That rate is real climate-model data (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050), multiplied by 2.5. Hot places die sooner. *(Phoenix: around 2074. London: around 2233.)*
+- **Hover or tap = glitch to today's real numbers** for that location. Footer line: "This is the one you can still change."
+- If the location can't be found, everything stays **redacted (████)**. Signal lost.
+- The AI's humour shows up in small notes, e.g. "Rounded down to be polite", "Est. later", and `console.log("hello from later.")`.
 
-1. **The AI's name:** is it "postapocapitalism", or something else hiding behind it?
-2. **The year it comes from:** a specific year, or redacted (`YEAR: ████`)?
-3. **Lore exposure:** explicit, or hinted plus a hidden page?
-4. **Worshippers vs customers:** creepy, hopeful, or both? (Section 3.)
-5. **Relationship with the planet's consciousness.** (Section 3.)
-6. **The next products,** and what each one cancels.
+## 8. Decided
+
+- **Name:** the AI named its front company **"postapocapitalism" as a joke**. **The AI has humour.** Its real name is never given. *(Claude's reading of the brief; confirm.)*
+- **Year and metrics:** they **change with the visitor's location** (see Telemetry above).
+- **Lore exposure:** **heavily hinted.** The site never states it outright.
+
+## 9. Open questions
+
+1. **Worshippers vs customers:** creepy, hopeful, or both? (Section 3.)
+2. **Relationship with the planet's consciousness.** (Section 3.)
+3. **The next products,** and what each one cancels.
 
 ---
 
