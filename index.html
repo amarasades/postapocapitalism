@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>postapocapitalism</title>
+<meta name="description" content="postapocapitalism builds software from salvage: fashion PLM, mesh tools, touchscreen DJ decks, and whatever comes next.">
+<meta name="theme-color" content="#d9d2c3">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23201d18'/%3E%3Crect x='3' y='3' width='6' height='2' fill='%23e8742c'/%3E%3Crect x='3' y='7' width='10' height='2' fill='%23d9d2c3'/%3E%3Crect x='3' y='11' width='4' height='2' fill='%23d9d2c3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Archivo:wght@500;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --case: #d9d2c3;        /* yellowed ABS plastic */
+    --case-dark: #c4bba8;
+    --panel: #ebe6da;
+    --ink: #201d18;
+    --ink-soft: #5b544a;
+    --rust: #e8742c;        /* warning-label orange */
+    --screen: #1c1a16;
+    --screen-text: #f2c66d; /* amber phosphor */
+    --line: #201d18;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Archivo", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--case);
+    color: var(--ink);
+    font: 15px/1.6 var(--mono);
+    -webkit-font-smoothing: antialiased;
+    /* faint grime / injection-mould speckle */
+    background-image: radial-gradient(rgba(32,29,24,.07) 1px, transparent 1px);
+    background-size: 5px 5px;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+  /* ---------- top strip ---------- */
+  .strip {
+    border-bottom: 2px solid var(--line);
+    background: var(--panel);
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .strip .wrap { display: flex; justify-content: space-between; gap: 16px; padding-block: 10px; flex-wrap: wrap; }
+  .strip nav { display: flex; gap: 20px; }
+  .strip nav a { text-decoration: none; }
+  .strip nav a:hover { color: var(--rust); }
+  .led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rust); margin-right: 8px; box-shadow: 0 0 6px var(--rust); animation: blink 2.4s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 72px 0 56px; }
+  .label {
+    display: inline-block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    border: 1.5px solid var(--line); padding: 3px 8px; background: var(--panel);
+  }
+  h1 {
+    font-family: var(--sans); font-weight: 800;
+    font-size: clamp(44px, 9.5vw, 128px);
+    line-height: .88; letter-spacing: -.035em;
+    margin: 24px 0 28px;
+    word-break: break-word;
+  }
+  h1 .cut { color: var(--rust); }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 32px; align-items: end; }
+  .hero p.lede { font-size: 17px; max-width: 46ch; }
+
+  /* salvaged CRT */
+  .crt {
+    background: var(--case-dark);
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 18px 30px;
+    box-shadow: 6px 6px 0 var(--line);
+    position: relative;
+  }
+  .crt::after { /* badge screw holes + vent */
+    content: ""; position: absolute; left: 18px; right: 18px; bottom: 11px; height: 8px;
+    background: repeating-linear-gradient(90deg, var(--line) 0 18px, transparent 18px 24px);
+    opacity: .35;
+  }
+  .screen {
+    background: var(--screen); color: var(--screen-text);
+    border-radius: 8px; padding: 18px; min-height: 210px;
+    font-size: 13px; line-height: 1.7;
+    position: relative; overflow: hidden;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.8);
+  }
+  .screen::before { /* scanlines */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+  }
+  .screen .dim { opacity: .55; }
+  .cursor { display: inline-block; width: .6em; height: 1.1em; background: var(--screen-text); vertical-align: text-bottom; animation: blink 1s steps(1) infinite; }
+
+  /* ---------- section heads ---------- */
+  section { padding: 56px 0; border-top: 2px solid var(--line); }
+  .sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+  h2 { font-family: var(--sans); font-weight: 800; font-size: clamp(28px, 4.5vw, 44px); letter-spacing: -.02em; line-height: 1; }
+  .sec-head span { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+
+  /* ---------- product modules ---------- */
+  .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+  .mod {
+    background: var(--panel); border: 2px solid var(--line);
+    display: flex; flex-direction: column;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .mod:hover { transform: translate(-3px, -3px); box-shadow: 5px 5px 0 var(--line); }
+  .mod-top {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--line); padding: 8px 12px;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  }
+  .slot { font-weight: 700; }
+  .status { padding: 1px 7px; border: 1.5px solid var(--line); }
+  .status.wip { background: var(--rust); color: var(--ink); }
+  .status.idea { background: transparent; }
+  .mod-body { padding: 20px 16px 22px; flex: 1; }
+  .mod h3 { font-family: var(--sans); font-weight: 800; font-size: 26px; letter-spacing: -.01em; margin-bottom: 10px; }
+  .mod p { color: var(--ink-soft); font-size: 14px; }
+  .mod ul { list-style: none; margin-top: 14px; font-size: 13px; }
+  .mod li::before { content: "› "; color: var(--rust); font-weight: 700; }
+  .mod.blank { background: transparent; border-style: dashed; }
+  .mod.blank .mod-top { border-bottom-style: dashed; }
+
+  /* ---------- manifesto / log ---------- */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .big { font-family: var(--sans); font-weight: 500; font-size: clamp(20px, 2.6vw, 28px); line-height: 1.3; letter-spacing: -.01em; }
+  .big em { font-style: normal; background: var(--rust); padding: 0 4px; }
+  .log { border: 2px solid var(--line); background: var(--screen); color: var(--screen-text); padding: 18px; font-size: 13px; }
+  .log div { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(242,198,109,.25); }
+  .log div:last-child { border-bottom: 0; }
+  .log time { opacity: .6; }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 2px solid var(--line); background: var(--ink); color: var(--case); padding: 28px 0; font-size: 12px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .tape { /* warning tape */
+    height: 14px; border-top: 2px solid var(--line);
+    background: repeating-linear-gradient(-45deg, var(--rust) 0 14px, var(--ink) 14px 28px);
+  }
+
+  @media (max-width: 760px) {
+    .hero { padding: 48px 0 40px; }
+    .hero-grid, .two { grid-template-columns: 1fr; }
+    .strip nav { gap: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="strip">
+  <div class="wrap">
+    <div><span class="led" aria-hidden="true"></span>postapocapitalism // salvage dept.</div>
+    <nav>
+      <a href="#modules">Software</a>
+      <a href="#about">About</a>
+      <a href="#log">Log</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="label">Software company · est. after the end</span>
+    <h1>post<span class="cut">apoca</span>&shy;pitalism</h1>
+    <div class="hero-grid">
+      <p class="lede">We build software out of what's left lying around: tools for fashion houses, 3D artists, DJs, and anyone else whose software got bloated, overpriced, or abandoned.</p>
+      <div class="crt" aria-hidden="true">
+        <div class="screen">
+          <div class="dim">PAC-OS v0.1 // recovered boot sector</div>
+          <div>&gt; mount /salvage ........ ok</div>
+          <div>&gt; scan modules ......... 3 found</div>
+          <div>&nbsp;&nbsp;[01] plm ............ <span class="dim">building</span></div>
+          <div>&nbsp;&nbsp;[02] remesh ......... <span class="dim">building</span></div>
+          <div>&nbsp;&nbsp;[03] deck ........... <span class="dim">building</span></div>
+          <div>&gt; <span id="typed"></span><span class="cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="modules">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Modules</h2>
+        <span>Bay 01–04 // more slots open</span>
+      </div>
+      <div class="modules">
+        <article class="mod">
+          <div class="mod-top"><span class="slot">Slot 01</span><span class="status wip">In development</span></div>
+          <div class="mod-body">
+            <h3>Fashion PLM</h3>
+            <p>Product lifecycle management for fashion: track a garment from first sketch to production run without a six-figure enterprise contract.</p>
+            <ul><li>Tech packs &amp; specs</li><li>Materials &amp; BOMs</li><li>Sample tracking</li></ul>
+          </div>
+        </article>
+        <article class="mod">
+          <div class="mod-top"><span class="slot">Slot 02</span><span class="status wip">In development</span></div>
+          <div class="mod-body">
+            <h3>Remesher</h3>
+            <p>Turn messy scans and sculpts into clean, usable topology. Built for people who'd rather be making things than fixing polygons.</p>
+            <ul><li>Quad-dominant retopology</li><li>Density control</li><li>Scan cleanup</li></ul>
+          </div>
+        </article>
+        <article class="mod">
+          <div class="mod-top"><span class="slot">Slot 03</span><span class="status wip">In development</span></div>
+          <div class="mod-body">
+            <h3>Touch Deck</h3>
+            <p>DJ software designed for the touchscreen first, not a laptop layout squeezed onto glass. Hands on the music, not hunting for knobs.</p>
+            <ul><li>Multi-touch mixing</li><li>Gesture cueing &amp; loops</li><li>Runs on salvaged tablets</li></ul>
+          </div>
+        </article>
+        <article class="mod blank">
+          <div class="mod-top"><span class="slot">Slot 04</span><span class="status idea">Empty bay</span></div>
+          <div class="mod-body">
+            <h3>Whatever's next</h3>
+            <p>This bay is waiting for the next thing we get annoyed enough to build.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="about">
+    <div class="wrap two">
+      <div>
+        <div class="sec-head"><h2>About</h2></div>
+        <p class="big">Most software is rented, bloated, and built to lock you in. We'd rather make <em>tools that just work</em>, cost what they should, and keep working after the company that sold them is gone.</p>
+      </div>
+      <div id="log">
+        <div class="sec-head"><h2>Log</h2><span>Latest transmissions</span></div>
+        <div class="log">
+          <div><time datetime="2026-11-18">2026.11.18</time><span>Site online. Signal restored.</span></div>
+          <div><time>—</time><span>More entries as modules come online.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="tape" aria-hidden="true"></div>
+<footer>
+  <div class="wrap">
+    <span>© <span id="yr">2026</span> postapocapitalism</span>
+    <span>Built from salvage. Runs on spite.</span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById("yr").textContent = new Date().getFullYear();
+  // terminal typer
+  (function () {
+    const el = document.getElementById("typed");
+    const lines = ["awaiting next module_", "rebuilding civilisation.exe", "do not unplug"];
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = lines[0]; return; }
+    let li = 0, ci = 0, del = false;
+    (function tick() {
+      const s = lines[li];
+      el.textContent = s.slice(0, ci);
+      if (!del && ci < s.length) ci++;
+      else if (!del) { del = true; return setTimeout(tick, 1800); }
+      else if (ci > 0) ci--;
+      else { del = false; li = (li + 1) % lines.length; }
+      setTimeout(tick, del ? 30 : 70);
+    })();
+  })();
+</script>
+</body>
+</html>
