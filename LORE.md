@@ -81,14 +81,15 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 ### Telemetry: how it works (canon, built)
 - **Origin: 2133.** Fixed, shown at the top of the site. It's the year the AI comes from.
 - **The panel's year is the visitor's own: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050) **× 5 runaway**. It's capped at 2133, because by the time the AI left, everywhere had crossed it. Hot places get early years and cool ones late. *(Simulated: Phoenix around 2050, London around 2120 to 2133.)*
-- **Panel layout (weather app):** a 2133-style year / 2026 pill toggle. The city, "Unlivable by ____" and the condition ("Ash haze, feels like 40°") on the left. A big thin temperature with an icon on the right. Stat rows, each with its own small visual:
-  - **Air:** a meter that runs off the end of the scale (500+).
-  - **Biosphere:** a ring (1 to 5% left).
-  - **Grid:** signal bars (Collapsed, since that year − 6; 2h / day, if lucky; Rationed, by lottery).
-- **The 2133-side glass is damaged:** wear scratches, plus a chunk broken off the bottom edge (actually cut out, so the sky shows through) with a glass edge face, shell-shaped fracture ripples, a loose shard, and cracks. **The 2026 side is clean and whole.**
-- **Hover, tap or the toggle glitches between the two timelines.** 2026 shows the real weather, AQI, "Intact, for now", "Online". Footer: "This is the one you can still change."
+- **Panel layout (weather app):** top row: "Forecast // inherited" (or "// current") on the left, and on the right a year that **shifts** between the unlivable year and today (the digits scramble, then land; no slider). The city, "Unlivable by ____" and the condition on the left. A big thin temperature with an icon on the right. Stat rows:
+  - **Air:** 10 coloured segments. At 500, two red segments break out past the end of the scale, blinking. Short labels: "500 Lethal" / "38 Good".
+  - **Biosphere:** three activity-style rings (flora, fauna, ocean). In 2133 they're red and nearly empty ("2% Left"); in 2026 they're full and coloured ("Intact, for now").
+  - **Grid:** a 24-hour strip of power. 2133 is a dead flatline, "Collapsed ████", with **the chip in the glass covering the end of the year**. 2026 is lit all day, "Online 24/7".
+- **The 2133-side glass is damaged:** light wear scratches and a small chip knocked out of the bottom-right corner (actually cut away). It has a glass edge face, shell-shaped ripples and two short cracks. **The 2026 side is clean and whole.**
+- **On phones,** the first screen is just "We create futures." with the sun and the orbit diagram. The forecast panel comes after you scroll.
+- **Hover or tap glitches between the two timelines.** 2026 shows the real weather, AQI, "Intact, for now", "Online". Footer: "This is the one you can still change."
 - If the location can't be found: "Signal lost", and everything is redacted (████).
-- The AI's humour shows up in small notes: "Rounded down to be polite", "Est. later", `console.log("hello from later.")`.
+- The AI's humour shows up in small notes: "Est. later", `console.log("hello from later.")`.
 
 ## 8. Decided
 
