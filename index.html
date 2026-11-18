@@ -689,6 +689,7 @@
   function applyClip() { tele.style.clipPath = mode === "future" ? biteClip : "none"; }
   damage();
   if ("ResizeObserver" in window) new ResizeObserver(damage).observe(tele);
+  if (document.fonts) document.fonts.ready.then(() => damage()); // the chip is placed against text, so re-cut once fonts land
 
   build(); resolve();
 })();
