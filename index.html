@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>postapocapitalism</title>
-<meta name="description" content="We create futures. Software that wastes less, lasts longer, and keeps culture alive.">
+<meta name="description" content="We create futures. Solutions that waste less, last longer, and keep culture alive.">
 <meta name="theme-color" content="#b9592a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b9592a'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%231a120d' stroke-width='1.2'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%23fff1d6'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,7 +37,10 @@
     background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 28%, var(--sky-3) 55%, var(--sky-4) 78%, var(--haze) 100%); }
   .sun { position: fixed; z-index: -3; pointer-events: none; width: min(34vmin, 300px); aspect-ratio: 1; border-radius: 50%; right: 14vw; top: 20vh;
     background: radial-gradient(circle, var(--sun) 0 58%, rgba(255,226,180,.55) 64%, transparent 72%); filter: blur(1.5px);
-    box-shadow: 0 0 120px 60px rgba(255, 190, 120, .35); opacity: .9; }
+    opacity: .9; }
+  /* the glow is a gradient, not a shadow: phones clip big shadows into a visible box */
+  .sun::before { content: ""; position: absolute; inset: -75%; border-radius: 50%; z-index: -1;
+    background: radial-gradient(circle, rgba(255,190,120,.42) 0, rgba(255,190,120,.3) 30%, rgba(255,190,120,.12) 50%, transparent 70%); }
   .smoke { position: fixed; inset: -10%; z-index: -3; pointer-events: none; overflow: hidden; }
   .smoke i { position: absolute; border-radius: 50%; filter: blur(70px); background: rgba(90, 40, 20, .35); animation: roll 70s linear infinite; }
   .smoke i:nth-child(1) { width: 70vw; height: 30vh; top: 10%; left: -30%; }
@@ -66,7 +69,8 @@
   .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--light); box-shadow: 0 0 8px var(--light); animation: blink 1.8s infinite; vertical-align: middle; margin-right: 7px; }
 
   /* ---------- nav ---------- */
-  .nav { position: sticky; top: 14px; z-index: 10; margin-top: 14px; }
+  .nav { position: sticky; top: 14px; z-index: 10; margin-top: 14px; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+  .nav.tucked { transform: translateY(calc(-100% - 20px)); opacity: 0; pointer-events: none; }
   .nav .glass { --r: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 10px 9px 16px; }
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -.02em; font-size: 15px; }
   .brand svg { width: 20px; height: 20px; }
@@ -79,6 +83,7 @@
   .hero { position: relative; overflow-x: clip; min-height: calc(100svh - 70px); display: flex; flex-direction: column; justify-content: center; padding: 40px 0 32px; }
   .hero-meta { display: flex; gap: 26px; color: var(--ink-dim); margin-bottom: 26px; flex-wrap: wrap; }
   .hero-meta b { color: var(--ink); font-weight: 500; }
+  .hero > .wrap { width: 100%; max-width: 1250px; }
   .hero-grid { display: grid; grid-template-columns: 1fr minmax(340px, 430px); align-items: center; gap: 40px; }
   h1 { font-weight: 800; font-size: clamp(64px, 14vw, 200px); line-height: .84; letter-spacing: -.06em; }
   h1 span { display: block; }
@@ -276,9 +281,9 @@
 
   <div class="wrap">
     <div class="hero-meta hud">
-      <span>Origin <b>2133</b></span>
-      <span>Timeline <b>Inherited</b></span>
       <span><i class="dot"></i><b>Signal live</b></span>
+      <span>Timeline <b>Inherited</b></span>
+      <span>Origin <b>2133</b></span>
       <span>UTC <b id="m-utc">··:··:··</b></span>
       <span>Sun–Earth <b id="m-km">···</b></span>
     </div>
@@ -315,7 +320,7 @@
       </aside>
     </div>
     <div class="hero-foot">
-      <p>Software that wastes less, lasts longer, and keeps culture alive. For Music, Fashion, Film, and whatever's next.</p>
+      <p>Solutions that waste less, last longer, and keep culture alive.</p>
       <a href="#modules" class="scroll hud"><i></i>Scroll</a>
     </div>
   </div>
@@ -557,7 +562,7 @@
     const mobile = innerWidth <= 900, W = mobile ? innerWidth * 1.5 : Math.min(820, innerWidth * .6);
     let cx, cy;
     if (mobile) { cx = innerWidth * .64; cy = (meta.bottom + we.top) / 2 - hr.top; }
-    else { const tr = $("tele").getBoundingClientRect(); cx = (we.right + tr.left) / 2 - hr.left; cy = Math.max(meta.bottom - hr.top + 30, tr.top - hr.top - 70); }
+    else { const tr = $("tele").getBoundingClientRect(); cx = tr.left + tr.width * .55 - hr.left; cy = Math.max(meta.bottom - hr.top + 20, tr.top - hr.top - 40); }
     o.style.width = W + "px"; o.style.left = (cx - W / 2) + "px"; o.style.top = (cy - W / 2) + "px";
   }
   placeOrrery(); addEventListener("resize", placeOrrery);
@@ -846,6 +851,23 @@
   damage();
   if ("ResizeObserver" in window) new ResizeObserver(damage).observe(tele);
   if (document.fonts) document.fonts.ready.then(() => damage()); // the chip is placed against text, so re-cut once fonts land
+
+
+  /* ---------- header: tucks away on the way down, comes back on the way up ---------- */
+  (() => {
+    const nav = document.querySelector(".nav"); let last = scrollY, ticking = false;
+    addEventListener("scroll", () => {
+      if (ticking) return; ticking = true;
+      requestAnimationFrame(() => {
+        const y = scrollY, dy = y - last;
+        if (y < 80 || dy < -4) nav.classList.remove("tucked");
+        else if (dy > 4) nav.classList.add("tucked");
+        if (Math.abs(dy) > 4) last = y;
+        ticking = false;
+      });
+    }, { passive: true });
+    nav.addEventListener("focusin", () => nav.classList.remove("tucked"));
+  })();
 
   build(); resolve();
 })();
