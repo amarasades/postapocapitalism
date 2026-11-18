@@ -35,10 +35,14 @@ Read this first, then `LORE.md`. Together they're everything the previous sessio
 | "Rounded down to be polite" | Removed. |
 | "Since ____" on the grid | Just "Collapsed" + year, with the chip covering the year's end. |
 | "Software that…" / "For Music, Fashion, Film, and whatever's next." | Current line: **"Solutions that waste less, last longer, and keep culture alive."** on **one row** on desktop. |
+| Film grain **on top of** the page | It dimmed every colour about 4% and killed the "futures." glow (and looked grainy when zoomed). The grain (`body::after`) must stay at **`z-index: -1`, behind the content**, as in the first orange version. |
+| Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." = `#fff3e0` with `text-shadow: 0 0 40px rgba(255,230,190,.5)`. |
+| "futures." over the pale part of the sky | The glow only reads over the orange. On phones it sits about 53 to 62% down the first screen (lower than the original 40 to 49%, which they asked for, but no lower). |
+| Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar). |
 | Sun glow as a CSS `box-shadow` | Clipped into a visible rectangle on phones. Now a gradient `::before` *behind* an `::after` disc. **Keep the disc on top**, or the sun goes "dead" (they noticed immediately). |
 
 **Loved, protect these:**
-- The **glow on "futures."**
+- The **glow on "futures."** (it's the first thing they check)
 - The **glitch between timelines**.
 - **"This is the one you can still change"** with **"Live"** in the 2026 footer.
 - The **location-based forecast** concept.

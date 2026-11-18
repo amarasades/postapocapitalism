@@ -48,7 +48,7 @@
   .smoke i:nth-child(2) { width: 60vw; height: 24vh; top: 38%; left: -40%; background: rgba(255, 220, 170, .25); animation-duration: 95s; animation-delay: -40s; }
   .smoke i:nth-child(3) { width: 80vw; height: 28vh; top: 66%; left: -50%; background: rgba(110, 50, 25, .25); animation-duration: 120s; animation-delay: -70s; }
   @keyframes roll { to { transform: translateX(170vw); } }
-  body::after { content: ""; position: fixed; inset: -10%; z-index: 50; pointer-events: none; opacity: .45; mix-blend-mode: multiply;
+  body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5; mix-blend-mode: multiply; /* behind the content, never on top of it */
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .15 0 0 0 0 .05 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 
   /* ---------- weathered glass ---------- */
@@ -86,7 +86,7 @@
   .hero-meta b { color: var(--ink); font-weight: 500; }
   .hero > .wrap { width: 100%; max-width: 1250px; }
   .hero-grid { display: grid; grid-template-columns: 1fr minmax(340px, 430px); align-items: center; gap: 40px; }
-  h1 { font-weight: 800; font-size: clamp(64px, 14vw, 200px); line-height: .84; letter-spacing: -.06em; }
+  h1 { font-weight: 700; font-size: clamp(64px, 15vw, 210px); line-height: .84; letter-spacing: -.055em; }
   h1 span { display: block; }
   h1 span:last-child { color: var(--light); text-shadow: 0 0 40px rgba(255, 230, 190, .5); }
   .hero-foot { margin-top: 36px; display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; }
@@ -214,13 +214,13 @@
   @media (max-width: 900px) {
     .hero { min-height: 0; padding-top: 24px; }
     .hero-grid { grid-template-columns: 1fr; gap: 24px; }
-    .hero-grid h1 { min-height: calc(100svh - 150px); display: flex; flex-direction: column; justify-content: center; padding-top: 5svh; }
+    .hero-grid h1 { min-height: calc(100svh - 150px); display: flex; flex-direction: column; justify-content: flex-start; padding-top: 14svh; } /* low, but "futures." stays over the orange so its glow reads */
     .orbit { right: -45%; width: 130vw; opacity: .5; }
     .paper { grid-template-columns: 1fr; }
     .sec-head .hud { text-align: left; }
   }
   @media (max-width: 640px) {
-    h1 { font-size: 23vw; }
+    h1 { font-size: 24vw; }
     .nav nav a span { display: none; }
     .nav nav a { padding: 7px 7px; }
     .brand .wm { display: none; }
@@ -561,10 +561,13 @@
   function placeOrrery() {
     const o = document.querySelector(".orbit"), hr = document.querySelector(".hero").getBoundingClientRect();
     const mobile = innerWidth <= 900, W = mobile ? innerWidth * 1.5 : Math.min(900, innerWidth * .62);
-    const cx = innerWidth * (mobile ? .92 : .86) - hr.left, cy = innerHeight - (hr.top + scrollY) - (mobile ? 30 : 60);
+    const cx = innerWidth * (mobile ? .92 : .86) - hr.left, cy = screenH - (hr.top + scrollY) - (mobile ? 30 : 60);
     o.style.width = W + "px"; o.style.left = (cx - W / 2) + "px"; o.style.top = (cy - W / 2) + "px";
   }
-  placeOrrery(); addEventListener("resize", placeOrrery);
+  // reference height is taken once (the small viewport), so the address bar showing/hiding while scrolling can't move it
+  let screenH = document.documentElement.clientHeight, lastW = innerWidth;
+  placeOrrery();
+  addEventListener("resize", () => { if (innerWidth === lastW) return; lastW = innerWidth; screenH = document.documentElement.clientHeight; placeOrrery(); });
   if (document.fonts) document.fonts.ready.then(placeOrrery);
 
   const wave = $("wave"); let t = 0;
