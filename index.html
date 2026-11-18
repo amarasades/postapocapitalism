@@ -4,202 +4,178 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>postapocapitalism</title>
-<meta name="description" content="postapocapitalism builds software for after the end: fashion PLM, mesh tools, touchscreen DJ decks, and whatever comes next.">
-<meta name="theme-color" content="#06070b">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.4' stop-color='%23c9b8ff'/%3E%3Cstop offset='1' stop-color='%233a3f7a'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='14' fill='url(%23g)'/%3E%3C/svg%3E">
+<meta name="description" content="postapocapitalism creates futures: fashion PLM, mesh tools, touchscreen DJ decks, and whatever comes next.">
+<meta name="theme-color" content="#b9592a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b9592a'/%3E%3Ccircle cx='16' cy='17' r='8' fill='%23ffe3b8'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --void: #06070b;
-    --ink: #eef0ff;
-    --ink-soft: rgba(230, 232, 255, .64);
-    --ink-faint: rgba(230, 232, 255, .38);
-    --ice: #a9c4ff;
-    --lilac: #c8a8ff;
-    --bruise: #ff9fd0;
-    --toxic: #8ff3df;
-    --glass: rgba(255, 255, 255, .055);
-    --glass-hi: rgba(255, 255, 255, .11);
-    --edge: rgba(255, 255, 255, .16);
-    --serif: "Instrument Serif", "Times New Roman", serif;
-    --sans: "Inter", system-ui, -apple-system, sans-serif;
-    --r: 28px;
+    /* wildfire-smoke sky, top to horizon */
+    --sky-1: #7a2e14;
+    --sky-2: #b9592a;
+    --sky-3: #d98a45;
+    --sky-4: #ecc08a;
+    --haze:  #f3dcb8;
+    --sun:   #fff1d6;
+    --ink: #1a120d;
+    --ink-soft: rgba(26, 18, 13, .68);
+    --ink-faint: rgba(26, 18, 13, .45);
+    --glass: rgba(255, 240, 220, .22);
+    --glass-hi: rgba(255, 245, 230, .42);
+    --sans: "Inter Tight", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --r: 22px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
-    background: var(--void);
     color: var(--ink);
-    font: 400 16px/1.6 var(--sans);
+    font: 400 16px/1.55 var(--sans);
     -webkit-font-smoothing: antialiased;
+    background: var(--sky-2);
     overflow-x: hidden;
   }
   a { color: inherit; text-decoration: none; }
-  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+  .mono { font-family: var(--mono); font-size: 12px; letter-spacing: .02em; }
 
-  /* ---------- the sky: drifting toxic-pastel haze ---------- */
-  .sky { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
-  .sky i {
-    position: absolute; border-radius: 50%;
-    filter: blur(90px); opacity: .55; mix-blend-mode: screen;
-    animation: drift 38s ease-in-out infinite alternate;
+  /* ---------- sky ---------- */
+  .sky {
+    position: fixed; inset: 0; z-index: -3; pointer-events: none;
+    background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 28%, var(--sky-3) 55%, var(--sky-4) 78%, var(--haze) 100%);
   }
-  .sky i:nth-child(1) { width: 62vmax; height: 62vmax; left: -18vmax; top: -22vmax; background: #3b4cc0; }
-  .sky i:nth-child(2) { width: 48vmax; height: 48vmax; right: -14vmax; top: 6vmax; background: var(--lilac); opacity: .32; animation-duration: 46s; animation-delay: -12s; }
-  .sky i:nth-child(3) { width: 40vmax; height: 40vmax; left: 22vmax; bottom: -20vmax; background: var(--bruise); opacity: .26; animation-duration: 52s; animation-delay: -20s; }
-  .sky i:nth-child(4) { width: 26vmax; height: 26vmax; left: 8vmax; top: 44vmax; background: var(--toxic); opacity: .16; animation-duration: 60s; animation-delay: -7s; }
-  @keyframes drift {
-    0%   { transform: translate(0, 0) scale(1); }
-    50%  { transform: translate(6vmax, 4vmax) scale(1.12); }
-    100% { transform: translate(-4vmax, 8vmax) scale(.94); }
+  .sun { /* flat disc you can stare at through the smoke */
+    position: fixed; z-index: -2; pointer-events: none;
+    width: min(34vmin, 300px); aspect-ratio: 1; border-radius: 50%;
+    right: 14vw; top: 22vh;
+    background: radial-gradient(circle, var(--sun) 0 58%, rgba(255,226,180,.55) 64%, transparent 72%);
+    filter: blur(1.5px);
+    box-shadow: 0 0 120px 60px rgba(255, 190, 120, .35);
+    opacity: .9;
   }
-  /* smog grain + vignette */
+  .smoke { position: fixed; inset: -10%; z-index: -2; pointer-events: none; overflow: hidden; }
+  .smoke i {
+    position: absolute; border-radius: 50%; filter: blur(70px);
+    background: rgba(90, 40, 20, .35);
+    animation: roll 70s linear infinite;
+  }
+  .smoke i:nth-child(1) { width: 70vw; height: 30vh; top: 10%; left: -30%; }
+  .smoke i:nth-child(2) { width: 60vw; height: 24vh; top: 38%; left: -40%; background: rgba(255, 220, 170, .25); animation-duration: 95s; animation-delay: -40s; }
+  .smoke i:nth-child(3) { width: 80vw; height: 28vh; top: 66%; left: -50%; background: rgba(110, 50, 25, .25); animation-duration: 120s; animation-delay: -70s; }
+  @keyframes roll { to { transform: translateX(170vw); } }
   .grain {
-    position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(6,7,11,.75) 100%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5; mix-blend-mode: multiply;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .15 0 0 0 0 .05 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* an old ad, burned into the screen */
+  .burn {
+    position: fixed; z-index: -1; pointer-events: none; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font: 700 clamp(80px, 19vw, 300px)/1 var(--sans); letter-spacing: -.05em; white-space: nowrap;
+    color: rgba(255, 245, 225, .07);
   }
 
-  /* ---------- liquid glass ---------- */
+  /* ---------- weathered glass ---------- */
   .glass {
     position: relative;
-    background: linear-gradient(155deg, var(--glass-hi), var(--glass) 40%, rgba(255,255,255,.025));
-    backdrop-filter: blur(28px) saturate(170%);
-    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    background: linear-gradient(160deg, var(--glass-hi), var(--glass) 45%, rgba(255,240,220,.14));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
     border-radius: var(--r);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.35),       /* top specular */
-      inset 0 -1px 0 rgba(255,255,255,.06),
-      inset 0 0 24px rgba(255,255,255,.04),
-      0 24px 60px -20px rgba(0,0,0,.6);
+    border: 1px solid rgba(255, 245, 230, .45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 20px 50px -24px rgba(60, 20, 5, .55);
+    overflow: hidden;
   }
-  .glass::before { /* refractive rim */
-    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-    background: linear-gradient(140deg, rgba(255,255,255,.55), rgba(255,255,255,.06) 35%, rgba(255,255,255,.02) 60%, rgba(200,168,255,.35));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
+  .glass::after { /* scratches + settled dust */
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .28; mix-blend-mode: soft-light;
+    background:
+      linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Cg stroke='%23fff' stroke-width='.6' fill='none' opacity='.8'%3E%3Cpath d='M20 40 L180 12'/%3E%3Cpath d='M60 260 L330 190'/%3E%3Cpath d='M250 30 L390 80'/%3E%3Cpath d='M5 150 L120 175'/%3E%3Cpath d='M300 250 Q340 230 395 240'/%3E%3Cpath d='M140 90 L210 70'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 100% 100%, 400px 300px;
   }
 
   /* ---------- nav ---------- */
   .nav { position: sticky; top: 14px; z-index: 10; margin-top: 14px; }
-  .nav .glass {
-    --r: 999px;
-    display: flex; justify-content: space-between; align-items: center; gap: 16px;
-    padding: 10px 12px 10px 20px; font-size: 14px;
-  }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; letter-spacing: -.01em; }
-  .orb-sm {
-    width: 18px; height: 18px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fff, var(--lilac) 40%, #3a3f7a 100%);
-    box-shadow: 0 0 14px rgba(200,168,255,.6);
-  }
-  .nav nav { display: flex; gap: 4px; }
-  .nav nav a { padding: 7px 14px; border-radius: 999px; color: var(--ink-soft); transition: background .2s, color .2s; }
-  .nav nav a:hover { background: rgba(255,255,255,.08); color: var(--ink); }
+  .nav .glass { --r: 16px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 10px 10px 18px; }
+  .brand { font-weight: 600; letter-spacing: -.02em; font-size: 15px; }
+  .nav nav { display: flex; gap: 2px; font-size: 14px; }
+  .nav nav a { padding: 7px 12px; border-radius: 10px; color: var(--ink-soft); transition: background .2s, color .2s; }
+  .nav nav a:hover { background: rgba(255,245,230,.35); color: var(--ink); }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; padding: 110px 0 90px; text-align: center; }
-  .eyebrow { font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-faint); }
+  .hero { min-height: calc(100svh - 70px); display: flex; flex-direction: column; justify-content: center; padding: 48px 0 32px; }
+  .hero .wrap { width: 100%; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 32px; }
   h1 {
-    font-family: var(--serif); font-weight: 400;
-    font-size: clamp(52px, 11.5vw, 168px);
-    line-height: .9; letter-spacing: -.03em;
-    margin: 22px 0 26px;
-    /* chrome / oil-slick */
-    background: linear-gradient(100deg, #fff 0%, var(--ice) 22%, #fff 38%, var(--lilac) 55%, var(--bruise) 72%, #fff 88%);
-    background-size: 220% 100%;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: sheen 14s ease-in-out infinite alternate;
-    word-break: break-word;
+    font-weight: 700;
+    font-size: clamp(64px, 15vw, 210px);
+    line-height: .84; letter-spacing: -.055em;
+    color: var(--ink);
   }
-  h1 em { font-style: italic; }
-  @keyframes sheen { to { background-position: 100% 0; } }
-  .lede { max-width: 560px; margin: 0 auto; font-size: 18px; color: var(--ink-soft); font-weight: 300; }
-
-  /* the floating glass orb */
-  .orb {
-    position: absolute; z-index: -1; left: 50%; top: 52%;
-    width: min(560px, 90vw); aspect-ratio: 1; transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background:
-      radial-gradient(circle at 32% 26%, rgba(255,255,255,.5), transparent 18%),
-      radial-gradient(circle at 70% 78%, rgba(255,159,208,.28), transparent 45%),
-      radial-gradient(circle at 50% 50%, rgba(169,196,255,.08), rgba(169,196,255,.02) 70%);
-    box-shadow: inset 0 0 80px rgba(200,168,255,.18), inset 0 2px 0 rgba(255,255,255,.25), 0 0 120px rgba(169,196,255,.12);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    animation: float 12s ease-in-out infinite;
-  }
-  @keyframes float { 50% { transform: translate(-50%, -54%) rotate(4deg); } }
-
-  .cta { display: flex; gap: 12px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
-  .btn { --r: 999px; padding: 13px 26px; font-size: 15px; font-weight: 500; transition: transform .2s; }
-  .btn:hover { transform: translateY(-2px); }
-  .btn.solid { background: linear-gradient(135deg, #fff, #dcd4ff); color: #13142a; box-shadow: 0 10px 40px -8px rgba(200,168,255,.7); border-radius: 999px; }
+  h1 span { display: block; }
+  h1 span:last-child { color: #fff3e0; text-shadow: 0 0 40px rgba(255, 230, 190, .5); }
+  .readout { padding: 16px 18px; min-width: 230px; --r: 14px; }
+  .readout div { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; }
+  .readout b { font-weight: 500; }
+  .readout .warn { color: #7a1d0a; }
+  .readout .blink { animation: blink 1.6s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .hero-foot { margin-top: 40px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .hero-foot p { max-width: 480px; font-size: 18px; color: var(--ink-soft); font-weight: 500; }
 
   /* ---------- sections ---------- */
-  section { padding: 80px 0; }
-  .sec-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
-  h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(38px, 5.5vw, 64px); line-height: 1; letter-spacing: -.02em; }
-  h2 em { color: var(--lilac); }
-  .sec-head p { color: var(--ink-faint); font-size: 14px; max-width: 34ch; }
+  section { padding: 72px 0; }
+  .sec-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+  h2 { font-weight: 700; font-size: clamp(40px, 6vw, 76px); line-height: .9; letter-spacing: -.045em; }
+  .sec-head p { color: var(--ink-soft); max-width: 36ch; }
 
-  /* ---------- modules ---------- */
-  .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
-  .mod { padding: 26px 24px 28px; display: flex; flex-direction: column; overflow: hidden; transition: transform .35s cubic-bezier(.2,.8,.2,1); }
-  .mod:hover { transform: translateY(-6px); }
-  .mod .halo { /* tinted light leaking through the glass */
-    position: absolute; width: 220px; height: 220px; border-radius: 50%; top: -90px; right: -70px;
-    filter: blur(50px); opacity: .55; pointer-events: none; transition: opacity .35s;
-  }
-  .mod:hover .halo { opacity: .85; }
-  .mod-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-faint); letter-spacing: .08em; }
-  .pill { padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: var(--ink-soft); letter-spacing: .02em; }
-  .mod h3 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.05; margin: 54px 0 12px; }
-  .mod p { color: var(--ink-soft); font-size: 14.5px; font-weight: 300; }
-  .mod ul { list-style: none; margin-top: 18px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .mod li { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.05); color: var(--ink-soft); }
-  .mod.ghost { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; border: 1px dashed rgba(255,255,255,.2); }
-  .mod.ghost::before { display: none; }
+  .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .mod { padding: 22px 22px 24px; display: flex; flex-direction: column; min-height: 320px; transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+  .mod:hover { transform: translateY(-5px); }
+  .mod-top { display: flex; justify-content: space-between; align-items: center; color: var(--ink-faint); }
+  .tag { padding: 3px 8px; border-radius: 6px; background: rgba(26,18,13,.08); color: var(--ink-soft); }
+  .mod h3 { font-size: 30px; font-weight: 600; letter-spacing: -.035em; line-height: 1; margin: auto 0 12px; padding-top: 56px; }
+  .mod p { color: var(--ink-soft); font-size: 15px; }
+  .mod ul { list-style: none; margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .mod li { padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(26,18,13,.15); color: var(--ink-soft); }
+  .mod.empty { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; border: 1px dashed rgba(26,18,13,.3); }
+  .mod.empty::after { display: none; }
 
-  /* ---------- about ---------- */
-  .about { padding: clamp(32px, 6vw, 72px); }
-  .about blockquote { font-family: var(--serif); font-size: clamp(28px, 4.2vw, 52px); line-height: 1.12; letter-spacing: -.015em; max-width: 22ch; }
-  .about blockquote em { background: linear-gradient(90deg, var(--ice), var(--lilac), var(--bruise)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .about .sig { margin-top: 28px; color: var(--ink-faint); font-size: 14px; }
+  .about { padding: clamp(28px, 5vw, 64px); display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; align-items: end; }
+  .about blockquote { font-size: clamp(28px, 3.8vw, 50px); font-weight: 600; line-height: 1.02; letter-spacing: -.04em; }
+  .about blockquote span { color: #fff3e0; }
+  .about .side { color: var(--ink-soft); }
 
-  /* ---------- log ---------- */
-  .log { padding: 8px 0; }
-  .log div { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 18px 28px; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .log div { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 16px 24px; border-bottom: 1px solid rgba(26,18,13,.1); }
   .log div:last-child { border-bottom: 0; }
-  .log time { color: var(--ink-faint); font-size: 14px; font-variant-numeric: tabular-nums; }
-  .log span { color: var(--ink-soft); }
+  .log time { color: var(--ink-faint); }
 
-  footer { padding: 40px 0 56px; color: var(--ink-faint); font-size: 13px; }
-  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer { padding: 32px 0 48px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--ink-soft); }
 
-  @media (max-width: 640px) {
-    .nav nav a { padding: 7px 10px; }
-    .brand span:last-child { display: none; }
-    .hero { padding: 72px 0 64px; }
-    .log div { grid-template-columns: 1fr; gap: 4px; padding: 16px 20px; }
+  @media (max-width: 760px) {
+    .hero .wrap { grid-template-columns: 1fr; }
+    h1 { font-size: 24vw; }
+    .readout { min-width: 0; }
+    .about { grid-template-columns: 1fr; }
+    .log div { grid-template-columns: 1fr; gap: 2px; }
+    .nav nav a { padding: 7px 8px; }
+    .sun { right: -6vw; top: 12vh; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before { animation: none !important; transition: none !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
-<div class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+<div class="sky" aria-hidden="true"></div>
+<div class="sun" aria-hidden="true"></div>
+<div class="smoke" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="burn" aria-hidden="true">SUBSCRIBE</div>
 <div class="grain" aria-hidden="true"></div>
 
 <div class="wrap nav">
   <div class="glass">
-    <a href="#" class="brand"><span class="orb-sm" aria-hidden="true"></span><span>postapocapitalism</span></a>
+    <a href="#" class="brand">postapocapitalism</a>
     <nav>
       <a href="#modules">Software</a>
       <a href="#about">About</a>
@@ -209,15 +185,18 @@
 </div>
 
 <header class="hero">
-  <div class="orb" aria-hidden="true"></div>
   <div class="wrap">
-    <div class="eyebrow">Software for after the end</div>
-    <h1>post<em>apoca</em>&shy;pitalism</h1>
-    <p class="lede">Tools for fashion houses, 3D artists, DJs, and anyone else whose software got bloated, overpriced, or abandoned.</p>
-    <div class="cta">
-      <a href="#modules" class="btn solid">See the software</a>
-      <a href="#about" class="btn glass">Why we exist</a>
+    <h1><span>We</span><span>create</span><span>futures.</span></h1>
+    <div class="readout glass mono" aria-label="Local conditions">
+      <div><span>AQI</span><b class="warn">312 hazardous</b></div>
+      <div><span>Temp</span><b>46°C</b></div>
+      <div><span>Grid</span><b>rationed</b></div>
+      <div><span>Signal</span><b class="blink">● live</b></div>
     </div>
+  </div>
+  <div class="wrap hero-foot">
+    <p>Software for fashion houses, 3D artists, DJs, and anyone else whose tools got bloated, overpriced, or abandoned.</p>
+    <a href="#modules" class="mono">↓ scroll</a>
   </div>
 </header>
 
@@ -225,35 +204,32 @@
   <section id="modules">
     <div class="wrap">
       <div class="sec-head">
-        <h2>The <em>modules</em></h2>
-        <p>Three in the works. One slot left open for whatever we get annoyed enough to build next.</p>
+        <h2>Software</h2>
+        <p>Three in the works. One bay left open for whatever we get annoyed enough to build next.</p>
       </div>
       <div class="modules">
         <article class="mod glass">
-          <span class="halo" style="background:var(--bruise)"></span>
-          <div class="mod-top"><span>01</span><span class="pill">In development</span></div>
+          <div class="mod-top mono"><span>01</span><span class="tag">in development</span></div>
           <h3>Fashion PLM</h3>
-          <p>Product lifecycle management for fashion. Track a garment from first sketch to production run without a six-figure enterprise contract.</p>
-          <ul><li>Tech packs</li><li>Materials &amp; BOMs</li><li>Samples</li></ul>
+          <p>Track a garment from first sketch to production run, without a six-figure enterprise contract.</p>
+          <ul class="mono"><li>tech packs</li><li>materials</li><li>samples</li></ul>
         </article>
         <article class="mod glass">
-          <span class="halo" style="background:var(--ice)"></span>
-          <div class="mod-top"><span>02</span><span class="pill">In development</span></div>
+          <div class="mod-top mono"><span>02</span><span class="tag">in development</span></div>
           <h3>Remesher</h3>
-          <p>Turn messy scans and sculpts into clean, usable topology. For people who'd rather be making things than fixing polygons.</p>
-          <ul><li>Retopology</li><li>Density control</li><li>Scan cleanup</li></ul>
+          <p>Turn messy scans and sculpts into clean, usable topology.</p>
+          <ul class="mono"><li>retopology</li><li>density</li><li>scan cleanup</li></ul>
         </article>
         <article class="mod glass">
-          <span class="halo" style="background:var(--lilac)"></span>
-          <div class="mod-top"><span>03</span><span class="pill">In development</span></div>
+          <div class="mod-top mono"><span>03</span><span class="tag">in development</span></div>
           <h3>Touch Deck</h3>
           <p>DJ software built for the touchscreen first, not a laptop layout squeezed onto glass.</p>
-          <ul><li>Multi-touch mixing</li><li>Gesture cueing</li><li>Loops</li></ul>
+          <ul class="mono"><li>multi-touch</li><li>gesture cues</li><li>loops</li></ul>
         </article>
-        <article class="mod ghost glass">
-          <div class="mod-top"><span>04</span><span class="pill">Open</span></div>
-          <h3>Whatever's next</h3>
-          <p>Reserved for the next thing.</p>
+        <article class="mod empty">
+          <div class="mod-top mono"><span>04</span><span class="tag">open</span></div>
+          <h3>Next</h3>
+          <p>Reserved.</p>
         </article>
       </div>
     </div>
@@ -262,17 +238,17 @@
   <section id="about">
     <div class="wrap">
       <div class="about glass">
-        <blockquote>Most software is rented, bloated, and built to lock you in. We make <em>tools that outlive the company that sold them.</em></blockquote>
-        <p class="sig">postapocapitalism, a software company</p>
+        <blockquote>Most software is rented. <span>Ours is built to outlast the company that sold it.</span></blockquote>
+        <p class="side">The future isn't chrome and neon. It's hot, hazy, patched together, and still running. We make the tools that keep it running.</p>
       </div>
     </div>
   </section>
 
   <section id="log">
     <div class="wrap">
-      <div class="sec-head"><h2>Log</h2><p>Transmissions from the build.</p></div>
-      <div class="log glass">
-        <div><time datetime="2026-11-18">18 Nov 2026</time><span>Site online. Signal restored.</span></div>
+      <div class="sec-head"><h2>Log</h2></div>
+      <div class="log glass mono">
+        <div><time datetime="2026-11-18">2026-11-18</time><span>Site online. Signal restored.</span></div>
         <div><time>—</time><span>More entries as modules come online.</span></div>
       </div>
     </div>
@@ -280,9 +256,9 @@
 </main>
 
 <footer>
-  <div class="wrap">
+  <div class="wrap mono">
     <span>© <span id="yr">2026</span> postapocapitalism</span>
-    <span>Made at the end of the world.</span>
+    <span>Still running.</span>
   </div>
 </footer>
 
