@@ -35,13 +35,10 @@
   /* ---------- the inherited sky ---------- */
   .sky { position: fixed; inset: 0; z-index: -4; pointer-events: none;
     background: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 28%, var(--sky-3) 55%, var(--sky-4) 78%, var(--haze) 100%); }
+  /* the original sun, exactly as first shipped. don't "fix" it: the owner judges everything against this */
   .sun { position: fixed; z-index: -3; pointer-events: none; width: min(34vmin, 300px); aspect-ratio: 1; border-radius: 50%; right: 14vw; top: 20vh;
-    filter: blur(1.5px); opacity: .9; }
-  /* the disc sits on top of its own glow */
-  .sun::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, var(--sun) 0 58%, rgba(255,226,180,.55) 64%, transparent 72%); }
-  /* the glow is a gradient, not a shadow: phones clip big shadows into a visible box */
-  .sun::before { content: ""; position: absolute; inset: -75%; border-radius: 50%;
-    background: radial-gradient(closest-side, rgba(255,190,120,.35) 0, rgba(255,190,120,.35) 52%, rgba(255,190,120,.24) 62%, rgba(255,190,120,.1) 74%, rgba(255,190,120,.03) 84%, transparent 92%); }
+    background: radial-gradient(circle, var(--sun) 0 58%, rgba(255,226,180,.55) 64%, transparent 72%); filter: blur(1.5px);
+    box-shadow: 0 0 120px 60px rgba(255, 190, 120, .35); opacity: .9; }
   .smoke { position: fixed; inset: -10%; z-index: -3; pointer-events: none; overflow: hidden; }
   .smoke i { position: absolute; border-radius: 50%; filter: blur(70px); background: rgba(90, 40, 20, .35); animation: roll 70s linear infinite; }
   .smoke i:nth-child(1) { width: 70vw; height: 30vh; top: 10%; left: -30%; }
@@ -54,7 +51,7 @@
   /* ---------- weathered glass ---------- */
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
     background: linear-gradient(160deg, rgba(255,248,238,.16), rgba(255,240,220,.05) 45%, rgba(255,240,220,.08));
-    backdrop-filter: blur(5px) saturate(160%); -webkit-backdrop-filter: blur(5px) saturate(160%);
+    backdrop-filter: blur(5px) brightness(1.04); -webkit-backdrop-filter: blur(5px) brightness(1.04);
     box-shadow: inset 0 1px 1px rgba(255,255,255,.75), inset 0 -1px 1px rgba(255,255,255,.22), inset 0 0 24px rgba(255,250,240,.14), 0 18px 44px -22px rgba(60, 20, 5, .5); }
   /* specular rim: bright where the light hits, almost gone on the sides */
   .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; padding: 1.2px;
@@ -775,7 +772,9 @@
       mk("feBlend", { in: "cR", in2: "cG", mode: "screen", result: "rg" }, f);
       mk("feBlend", { in: "rg", in2: "cB", mode: "screen", result: "rgb" }, f);
       mk("feGaussianBlur", { in: "rgb", stdDeviation: .7, result: "soft" }, f);
-      mk("feColorMatrix", { in: "soft", type: "saturate", values: 1.35 }, f);
+      // no saturation boost: glass bends light, it doesn't add colour. a touch of brightness, like light passing through
+      const ct = mk("feComponentTransfer", { in: "soft" }, f);
+      ["feFuncR", "feFuncG", "feFuncB"].forEach(t => mk(t, { type: "linear", slope: 1.04 }, ct));
       return `url(#${id})`;
     }
     let n = 0;

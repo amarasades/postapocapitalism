@@ -1,6 +1,6 @@
 # CLAUDE.md: postapocapitalism.org
 
-Read this first, then `LORE.md`. Together they're everything the previous sessions knew. Nothing else carries over between accounts.
+Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the original version the owner loved: screenshots and the untouched page). Together they're everything the previous sessions knew. Nothing else carries over between accounts.
 
 ---
 
@@ -39,7 +39,8 @@ Read this first, then `LORE.md`. Together they're everything the previous sessio
 | Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." = `#fff3e0` with `text-shadow: 0 0 40px rgba(255,230,190,.5)`. |
 | "futures." over the pale part of the sky | The glow only reads over the orange. On phones it sits about 53 to 62% down the first screen (lower than the original 40 to 49%, which they asked for, but no lower). |
 | Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar). |
-| Sun glow as a CSS `box-shadow` | Clipped into a visible rectangle on phones. Now a gradient `::before` *behind* an `::after` disc. **Keep the disc on top**, or the sun goes "dead" (they noticed immediately). |
+| Replacing the sun's `box-shadow` glow with a gradient | Tried, to remove a faint rectangle on phones. It made the sun blotchy and "dead". **The sun is restored exactly to the original** (see `archive/first-orange/README.md`). The faint phone rectangle was in the original too; leave it. |
+| Saturation boost in the glass | The glass used `saturate(1.35 to 1.6)`, which made everything behind it about 14% more orange ("way too orange"). **Glass adds no saturation**: only refraction, a light blur and brightness ×1.04. |
 
 **Loved, protect these:**
 - The **glow on "futures."** (it's the first thing they check)
