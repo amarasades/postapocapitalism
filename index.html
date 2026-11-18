@@ -54,9 +54,7 @@
     border: 1px solid var(--edge);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 20px 50px -24px rgba(60, 20, 5, .55); }
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .28; mix-blend-mode: soft-light;
-    background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Cg stroke='%23fff' stroke-width='.6' fill='none' opacity='.8'%3E%3Cpath d='M20 40 L180 12'/%3E%3Cpath d='M60 260 L330 190'/%3E%3Cpath d='M250 30 L390 80'/%3E%3Cpath d='M5 150 L120 175'/%3E%3Cpath d='M300 250 Q340 230 395 240'/%3E%3Cpath d='M140 90 L210 70'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: 100% 100%, 400px 300px; }
+    background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   .bar { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--ink-line); background: rgba(26,18,13,.06); }
   .bar .id { padding-right: 14px; border-right: 1px solid var(--ink-line); color: var(--ink-dim); }
   .bar .sp { flex: 1; }
@@ -120,6 +118,10 @@
   .tele .hot { color: #7a1d0a; }
   .tele.now .hot { color: var(--ink); }
   .tele.resolving .tele-body, .tele.resolving .tiles { animation: blink 1.1s infinite; }
+  .scratches { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; border-radius: inherit; transition: opacity .15s;
+    -webkit-mask-image: radial-gradient(circle at 78% 12%, #000 0, rgba(0,0,0,.85) 40%, rgba(0,0,0,.6) 100%);
+            mask-image: radial-gradient(circle at 78% 12%, #000 0, rgba(0,0,0,.85) 40%, rgba(0,0,0,.6) 100%); }
+  .tele.now .scratches { opacity: 0; }
   .tele.now { background: linear-gradient(160deg, rgba(240,246,255,.5), rgba(225,236,255,.24) 45%, rgba(225,236,255,.14)); }
   .tele.glitch .tele-body, .tele.glitch .tiles { animation: glitch .26s steps(2) 1; }
   @keyframes glitch {
@@ -257,6 +259,7 @@
       <h1><span>We</span><span>create</span><span>futures.</span></h1>
 
       <aside class="tele glass resolving" id="tele" tabindex="0" aria-live="polite" aria-label="Weather for your location in 2133 and today. Hover, tap or use the toggle to compare.">
+        <canvas class="scratches" aria-hidden="true"></canvas>
         <div class="tele-top">
           <span class="hud" id="t-mode">Forecast // inherited</span>
           <div class="seg" role="group" aria-label="Timeline">
@@ -581,6 +584,59 @@
     }
     build(); tele.classList.remove("resolving"); render();
   }
+
+  /* ---------- scratches: only the inherited glass is damaged ---------- */
+  const cv = tele.querySelector(".scratches");
+  function scratch() {
+    const dpr = Math.min(devicePixelRatio || 1, 2), w = tele.clientWidth, h = tele.clientHeight;
+    if (!w || !h) return;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h); c.lineCap = "round";
+    let seed = 1337; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const rr = (a, b) => a + r() * (b - a);
+    // 1. swirl marks: years of being wiped with a sleeve, in circles
+    [[w * .78, h * .2], [w * .15, h * .9]].forEach(([cx, cy], k) => {
+      for (let i = 0; i < 240; i++) {
+        const rad = rr(20, Math.max(w, h) * 1.1), a0 = rr(0, Math.PI * 2), len = rr(.04, .22) * (k ? .7 : 1), al = rr(.08, .32);
+        c.beginPath(); c.arc(cx, cy, rad + .6, a0, a0 + len); c.strokeStyle = `rgba(80,32,10,${(al * .55).toFixed(3)})`; c.lineWidth = .5; c.stroke();
+        c.beginPath(); c.arc(cx, cy, rad, a0, a0 + len); c.strokeStyle = `rgba(255,250,240,${al.toFixed(3)})`; c.lineWidth = rr(.4, .8); c.stroke();
+      }
+    });
+    // 2. hairlines: wiped mostly one way
+    for (let i = 0; i < 70; i++) {
+      const ang = (r() < .7 ? -.42 : .9) + rr(-.12, .12), len = rr(14, 130), x = rr(0, w), y = rr(0, h);
+      const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len, al = rr(.14, .42);
+      c.beginPath(); c.moveTo(x + .5, y + .6); c.lineTo(ex + .5, ey + .6); c.strokeStyle = `rgba(80,32,10,${(al * .6).toFixed(3)})`; c.lineWidth = .5; c.stroke();
+      c.beginPath(); c.moveTo(x, y); c.lineTo(ex, ey); c.strokeStyle = `rgba(255,250,240,${al.toFixed(3)})`; c.lineWidth = rr(.35, .65); c.stroke();
+    }
+    // 3. deep gouges: a dark groove with a bright lip, fading at the ends
+    for (let i = 0; i < 4; i++) {
+      const ang = rr(-.6, -.2) + (i === 3 ? 1.3 : 0), len = rr(.35, .8) * w;
+      let x = rr(-.1, .7) * w, y = rr(.1, .95) * h; const pts = [[x, y]];
+      for (let s = 0; s < 14; s++) { x += Math.cos(ang) * len / 14 + rr(-1.2, 1.2); y += Math.sin(ang) * len / 14 + rr(-1.2, 1.2); pts.push([x, y]); }
+      for (let s = 1; s < pts.length; s++) {
+        const f = Math.sin(s / pts.length * Math.PI), [ax, ay] = pts[s - 1], [bx, by] = pts[s];
+        c.beginPath(); c.moveTo(ax + .7, ay + .9); c.lineTo(bx + .7, by + .9); c.strokeStyle = `rgba(70,28,8,${(.28 * f).toFixed(3)})`; c.lineWidth = 1.1 * f + .2; c.stroke();
+        c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.strokeStyle = `rgba(255,252,245,${(.6 * f).toFixed(3)})`; c.lineWidth = .9 * f + .2; c.stroke();
+        if (r() < .12) { c.beginPath(); c.arc(bx + rr(-1, 1), by + rr(-1, 1), rr(.6, 1.4), 0, 7); c.fillStyle = `rgba(255,252,245,${(.5 * f).toFixed(3)})`; c.fill(); }
+      }
+    }
+    // 4. an impact chip in the corner, with a few short cracks running off it
+    const ix = w * .95, iy = h * .4;
+    for (let i = 0; i < 9; i++) {
+      let a = rr(0, Math.PI * 2), x = ix, y = iy; const L = rr(18, 70), pts = [[x, y]];
+      for (let s = 0; s < 6; s++) { a += rr(-.35, .35); x += Math.cos(a) * L / 6; y += Math.sin(a) * L / 6; pts.push([x, y]); }
+      [["rgba(70,28,8,.4)", .8, .7], ["rgba(255,252,245,.75)", 0, .8]].forEach(([col, off, lw]) => {
+        c.beginPath(); pts.forEach(([px, py], j) => j ? c.lineTo(px + off, py + off) : c.moveTo(px + off, py + off)); c.strokeStyle = col; c.lineWidth = lw; c.stroke();
+      });
+    }
+    c.beginPath(); c.arc(ix, iy, 14, 0, 7); c.strokeStyle = "rgba(255,252,245,.35)"; c.lineWidth = .6; c.stroke();
+    const g = c.createRadialGradient(ix, iy, 0, ix, iy, 9); g.addColorStop(0, "rgba(255,252,245,.75)"); g.addColorStop(1, "rgba(255,252,245,0)");
+    c.fillStyle = g; c.beginPath(); c.arc(ix, iy, 7, 0, 7); c.fill();
+  }
+  scratch();
+  if ("ResizeObserver" in window) new ResizeObserver(scratch).observe(tele);
+
   build(); resolve();
 })();
 </script>
