@@ -79,16 +79,18 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 - **Lore:** heavily hinted on the main site. A **hidden page** (`/origin`, "transmission") is still an option for people who dig.
 
 ### Telemetry: how it works (canon, built)
-- **Every visitor gets their own inherited future.** The year, temperature, AQI, biosphere and grid are worked out from **where the visitor is**, based on their IP address.
-- **The year** is when that location's summer peak would hit **48°C** under a runaway warming rate. That rate is real climate-model data (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050), multiplied by 2.5. Hot places die sooner. *(Phoenix: around 2074. London: around 2233.)*
-- **Hover or tap = glitch to today's real numbers** for that location. Footer line: "This is the one you can still change."
-- If the location can't be found, everything stays **redacted (████)**. Signal lost.
-- The AI's humour shows up in small notes, e.g. "Rounded down to be polite", "Est. later", and `console.log("hello from later.")`.
+- **Origin: 2133.** This is fixed and the same for everyone. It's the year the AI comes from.
+- **The panel is a weather app for 2133 at the visitor's location**, worked out from their IP address. It shows the city, a big temperature with an icon, the condition ("Ash haze · Feels like 43°"), and three tiles: Air, Biosphere and Grid.
+- **The predictions are heavily bumped.** Warming = that location's real modelled rate (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050) **× 5 runaway** × years to 2133, with a minimum of +16°C. Air is 430 to 500+ ("Off the scale"). Biosphere is 1 to 5% remaining. Grid is Collapsed (since 2119), 2h / day (if lucky), or Rationed (by lottery).
+- *(Simulated examples: London in November is 9° now and 36° in 2133. Phoenix is 24° now and 57° in 2133.)*
+- **A 2133 / 2026 pill toggle, plus hover or tap, glitches to today's real weather** for that place: real condition, icon, feels-like, AQI. Biosphere "Intact, for now". Grid "Online, taken for granted". Footer: "This is the one you can still change."
+- If the location can't be found: "Signal lost", and the values are redacted (████).
+- The AI's humour shows up in small notes: "Rounded down to be polite", "Est. later", `console.log("hello from later.")`.
 
 ## 8. Decided
 
 - **Name:** the AI named its front company **"postapocapitalism" as a joke**. **The AI has humour.** Its real name is never given. *(Claude's reading of the brief; confirm.)*
-- **Year and metrics:** they **change with the visitor's location** (see Telemetry above).
+- **Origin year: 2133**, fixed. The **conditions** change with the visitor's location (see Telemetry above).
 - **Lore exposure:** **heavily hinted.** The site never states it outright.
 
 ## 9. Open questions
