@@ -394,10 +394,10 @@
             <svg viewBox="0 0 300 160" fill="none" stroke="#1a120d">
               <circle cx="150" cy="80" r="58" stroke-opacity=".55"/>
               <g class="globe-back" stroke-opacity=".12"></g><g class="globe-front" stroke-opacity=".4"></g>
-              <circle cx="190" cy="47" r="3.5" fill="#fff3e0" stroke="none"/>
-              <line x1="190" y1="47" x2="244" y2="28" stroke-opacity=".4" stroke-dasharray="1 3"/>
+              <line class="g-lead" x1="190" y1="47" x2="244" y2="28" stroke-opacity=".4" stroke-dasharray="1 3"/>
+              <circle class="g-vert" cx="190" cy="47" r="3.5" fill="#fff3e0" stroke="none"/>
               <g font-family="Chakra Petch" font-size="9" letter-spacing="1.2" fill="#1a120d" fill-opacity=".6" stroke="none">
-                <text x="226" y="22" class="quad">QUAD 98%</text><text x="20" y="150">DENSITY 0.42</text>
+                <text x="226" y="22" class="quad">FACES 128</text><text x="20" y="150" class="dens">DENSITY 100%</text>
               </g>
             </svg>
           </div>
@@ -411,9 +411,9 @@
           <div class="bar hud"><span class="id">MOD.03</span><span class="sp"></span><span><i class="dot"></i>In development</span></div>
           <div class="viz" aria-hidden="true">
             <svg viewBox="0 0 300 160" fill="none" stroke="#1a120d" id="viz-deck">
-              <g class="spin a" style="transform-origin:70px 76px"><circle cx="70" cy="76" r="42" stroke-opacity=".5" stroke-dasharray="3 3"/></g>
+              <g class="spin" style="transform-origin:70px 76px;animation:spin 42.86s linear infinite"><circle cx="70" cy="76" r="42" stroke-opacity=".5" stroke-dasharray="3 3"/></g>
               <circle cx="70" cy="76" r="26" stroke-opacity=".3"/><circle cx="70" cy="76" r="3.5" fill="#fff3e0" stroke="none"/>
-              <g class="spin c" style="transform-origin:230px 76px"><circle cx="230" cy="76" r="42" stroke-opacity=".5" stroke-dasharray="3 3"/></g>
+              <g class="spin" style="transform-origin:230px 76px;animation:spin 45s linear infinite"><circle cx="230" cy="76" r="42" stroke-opacity=".5" stroke-dasharray="3 3"/></g>
               <circle cx="230" cy="76" r="26" stroke-opacity=".3"/><circle cx="230" cy="76" r="3.5" fill="#fff3e0" stroke="none"/>
               <path id="wave2" stroke-opacity=".3" d=""/>
               <path id="wave" stroke-opacity=".7" d=""/>
@@ -692,7 +692,8 @@
     // r3mesher: a turning globe, 8 meridians and 7 parallels (twice the old count). the mesh breathes between "scan" and
     // "remeshed": while messy the lines drift off their even spacing, then they snap back into a clean quad grid.
     // QUAD % follows how clean it is
-    const gB = document.querySelector(".globe-back"), gF = document.querySelector(".globe-front"), quad = document.querySelector(".quad");
+    const gB = document.querySelector(".globe-back"), gF = document.querySelector(".globe-front"), quad = document.querySelector(".quad"), dens = document.querySelector(".dens"),
+      vert = document.querySelector(".g-vert"), lead = document.querySelector(".g-lead");
     const MER = 16, PAR = 7, tilt = .38, ct = Math.cos(tilt), st = Math.sin(tilt), R = 58, CX = 150, CY = 80;
     const jitL = Array.from({ length: MER }, (_, i) => Math.sin(i * 12.9898) * .32), jitP = Array.from({ length: PAR }, (_, i) => Math.sin(i * 78.233) * .16);
     const project = (lat, lon) => { const X = Math.cos(lat) * Math.sin(lon), Y = Math.sin(lat), Z = Math.cos(lat) * Math.cos(lon); return [CX + R * X, CY - R * (Y * ct - Z * st), Y * st + Z * ct]; };
@@ -724,7 +725,13 @@
         const [f, b] = line(pts); F += f; B += b;
       }
       front.setAttribute("d", F); back.setAttribute("d", B);
-      quad.textContent = `QUAD ${Math.round(98 - 37 * mess)}%`;   // (mess = how far the halving has gone)
+      // the readout follows the mesh: 16 longitude segments × 8 latitude bands = 128 faces; each halving halves it
+      const c01 = v => Math.min(1, Math.max(0, v)), faces = Math.round((8 + 8 * c01(sm)) * (4 + 4 * c01(sp)));
+      quad.textContent = `FACES ${faces}`; dens.textContent = `DENSITY ${Math.round(faces / 128 * 100)}%`;
+      // the marker rides a real vertex (22.5°N, a parallel that never merges away): the one furthest round to the right, front-facing
+      let best = null;
+      for (let i = 0; i < MER; i += (sm < .5 ? 2 : 1)) { const v = project(Math.PI / 8, rot + i * 2 * Math.PI / MER); if (v[2] > .15 && (!best || v[0] > best[0])) best = v; }
+      if (best) { vert.setAttribute("cx", f1(best[0])); vert.setAttribute("cy", f1(best[1])); lead.setAttribute("x1", f1(best[0])); lead.setAttribute("y1", f1(best[1])); }
     };
 
     // sc3ne: sketch fans out to every stage, and every stage links to every other by an arc. the links draw themselves on
@@ -1242,6 +1249,23 @@
         const cv2 = this.cv; cv2.width = Math.round(w * k); cv2.height = Math.round(h * k);
         const x = cv2.getContext("2d"); x.setTransform(k, 0, 0, k, 0, 0); x.clearRect(0, 0, w, h);
         const vTop = top - scrollY, vBot = vTop + h;   // band in viewport coordinates, right now
+        // first the glass panels' own backgrounds (their copied fills on .lensbg, and .bar strips), so the nav's rim shows
+        // a panel as a panel and not bare sky (that left a lighter rectangle where the nav crossed the forecast)
+        const paintBg = el => {
+          const r = el.getBoundingClientRect(); if (r.bottom < vTop || r.top > vBot || !r.width) return;
+          const cs = getComputedStyle(el), rad = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, r.width / 2, r.height / 2);
+          const X = r.left, Y = r.top - vTop, path = new Path2D(); path.roundRect ? path.roundRect(X, Y, r.width, r.height, rad) : path.rect(X, Y, r.width, r.height);
+          if (cs.backgroundColor && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor)) { x.fillStyle = cs.backgroundColor; x.fill(path); }
+          const lg = /linear-gradient\((\d+(?:\.\d+)?)deg,(.*)\)$/.exec(cs.backgroundImage || "");
+          if (lg) {
+            const a = parseFloat(lg[1]) * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a), cx = X + r.width / 2, cy = Y + r.height / 2;
+            const L = Math.abs(r.width * dx) + Math.abs(r.height * dy), gr = x.createLinearGradient(cx - dx * L / 2, cy - dy * L / 2, cx + dx * L / 2, cy + dy * L / 2);
+            const stops = [...lg[2].matchAll(/(rgba?\([^)]*\))\s*([\d.]+%)?/g)];
+            stops.forEach((m, i) => gr.addColorStop(m[2] ? parseFloat(m[2]) / 100 : i / Math.max(1, stops.length - 1), m[1]));
+            x.fillStyle = gr; x.fill(path);
+          }
+        };
+        document.querySelectorAll(".lensbg, .glass .bar").forEach(el => { if (!el.closest(".nav")) paintBg(el); });
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: n => {
           const el = n.parentElement; if (!el || !n.nodeValue.trim() || el.closest(".nav, script, style, svg, canvas, [hidden]")) return NodeFilter.FILTER_REJECT;
           const r = el.getBoundingClientRect(); return r.bottom > vTop && r.top < vBot && r.width ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } });
