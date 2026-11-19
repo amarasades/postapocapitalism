@@ -1076,6 +1076,13 @@
     // trails outside it), and the picture stays fixed to the screen like the sun (so the rainbow doesn't lag)
     const LENS_FS = COMMON + `
       uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2; uniform float uFbH;
+      uniform sampler2D uOrb; uniform vec4 uOrbR; uniform float uOrbA;
+      // what's behind the glass: sky, sun, and the solar system (a snapshot texture, refreshed every second)
+      vec3 behind(vec2 p){
+        vec3 c = scene(p);
+        if (uOrbA > 0.) { vec2 u = (p - uOrbR.xy) / uOrbR.zw;
+          if (u.x > 0. && u.y > 0. && u.x < 1. && u.y < 1.) { vec4 o = texture2D(uOrb, u); c = mix(c, o.rgb, o.a * uOrbA); } }
+        return c; }
       void main(){
         vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y), p = uRect.xy + lp, h = uRect.zw * .5;
         float R = uGeo.x, Bv = uGeo.y;
@@ -1085,16 +1092,26 @@
         if (dd < -2. || dd > Bv || length(g) == 0. || (uChip.z > 0. && lp.x > uChip.x && lp.y > uChip.y)) { gl_FragColor = vec4(0.); return; }
         float t = 1. - clamp(dd / Bv, 0., 1.), m = t*t*(3. - 2.*t)*t;
         vec2 off = -normalize(g) * m * uGeo.z;
-        vec3 straight = scene(p), bent = vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b);
-        vec3 dc = abs(bent - straight);
-        // only where the bend has real contrast to work with (the sun's edge). a bent sky gradient changes the colour a
-        // little too, and a late frame of THAT showed as a band inside the cards; now nothing is drawn there at all
-        float vis = smoothstep(.07, .16, max(dc.r, max(dc.g, dc.b)));
+        // full-spectrum dispersion: seven wavelengths, each bent a little less than the last (red most, violet least),
+        // weighted by its colour; then the split is pushed apart for a saturated rainbow
+        vec3 sum = vec3(0.), wsum = vec3(0.), avg = vec3(0.);
+        for (int k = 0; k < 7; k++) {
+          float fk = float(k), sk = 1.5 - fk * .14;
+          vec3 w = fk < .5 ? vec3(1., 0., 0.) : fk < 1.5 ? vec3(1., .5, 0.) : fk < 2.5 ? vec3(1., 1., 0.) : fk < 3.5 ? vec3(0., 1., 0.)
+                 : fk < 4.5 ? vec3(0., 1., 1.) : fk < 5.5 ? vec3(0., .3, 1.) : vec3(.55, 0., 1.);
+          vec3 sc = behind(p + off * sk);
+          sum += sc * w; wsum += w; avg += sc;
+        }
+        vec3 bent = sum / wsum; avg /= 7.;
+        bent = clamp(avg + (bent - avg) * 1.9, 0., 1.);
+        bent = mix(behind(p), bent, smoothstep(0., 2., dd));                 // ease in over the outer 2px: no stair-steps
         vec3 c = bent * vec3(246.,242.,239.)/255.;                          // the page tint, which this canvas sits above
         vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uRect.z + .9397*uRect.w) + .5;
         vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
         c = mix(c, f.rgb, f.a);                                              // the panel's own tint (this canvas sits above it too)
-        float a = vis * (1. - smoothstep(Bv * .75, Bv, dd));
+        // the whole bevel, no contrast gate (that gate let the unbent sun edge show through). the bend itself goes to zero
+        // at the inner end, so it meets the real thing with no seam
+        float a = 1. - smoothstep(Bv * .7, Bv, dd);
         gl_FragColor = vec4(c * a, a);
       }`;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
@@ -1129,7 +1146,10 @@
     const panels = [...document.querySelectorAll(".glass")].map(el => {
       const c = document.createElement("canvas"); c.className = "lensfix"; c.setAttribute("aria-hidden", "true");
       const g = c.getContext("webgl", { ...opts, alpha: true, premultipliedAlpha: true }); if (!g) return null;
-      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFbH"]); if (!U) return null;
+      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFbH", "uOrb", "uOrbR", "uOrbA"]); if (!U) return null;
+      const tex = g.createTexture(); g.bindTexture(g.TEXTURE_2D, tex);
+      [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]].forEach(([k, v]) => g.texParameteri(g.TEXTURE_2D, k, v));
+      g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 1, 1, 0, g.RGBA, g.UNSIGNED_BYTE, new Uint8Array(4)); g.uniform1i(U.uOrb, 0);
       el.prepend(c);
       return { el, c, g, U, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0, on: false };
     }).filter(Boolean);
@@ -1141,9 +1161,10 @@
       const { g, U } = P, b = P.el.getBoundingClientRect();   // live, every draw: cached positions went stale when the forecast loaded and pushed the cards down
       P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
       if (P.c.width !== Math.round(P.w) || P.c.height !== Math.round(P.h)) { P.c.width = Math.round(P.w); P.c.height = Math.round(P.h); }
-      g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height); setScene(g, U);
+      g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height);
+      const ob = orbEl.getBoundingClientRect(); g.uniform4f(U.uOrbR, ob.left, ob.top, ob.width, ob.height); g.uniform1f(U.uOrbA, orbReady ? orbAlpha : 0); setScene(g, U);
       g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
-      g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .5);
+      g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
       const F = P.el === tele ? (mode === "now" ? FILL.now : FILL.tele) : FILL.glass;
       [U.uF0, U.uF1, U.uF2].forEach((u, i) => g.uniform4f(u, F[i][0] / 255, F[i][1] / 255, F[i][2] / 255, F[i][3]));
@@ -1154,12 +1175,29 @@
     const syncSize = () => { const r = skyEl.getBoundingClientRect();
       if (Math.round(r.width) !== cv.width || Math.round(r.height) !== cv.height) { measureFixed(); measure(); drawSky(); } };
     let settle = 0;
+    // the solar system as a texture: rasterised from its SVG once a second (it only moves that often), uploaded to each
+    // panel, so the glass bends its orbits too
+    const orbEl = document.querySelector(".orbit"), orbSvg = orbEl.querySelector("svg"), orbCv = document.createElement("canvas");
+    let orbReady = false, orbAlpha = 0;
+    const snapOrbit = () => {
+      const w = Math.round(orbEl.offsetWidth), h = Math.round(orbEl.offsetHeight); if (!w || !h) return;
+      const xml = new XMLSerializer().serializeToString(orbSvg).replace("<svg", `<svg width="${w}" height="${h}"`);
+      const img = new Image();
+      img.onload = () => {
+        orbCv.width = w; orbCv.height = h; const x = orbCv.getContext("2d"); x.clearRect(0, 0, w, h); x.drawImage(img, 0, 0, w, h);
+        orbAlpha = parseFloat(getComputedStyle(orbEl).opacity) || 1;
+        try { panels.forEach(P => P.g.texImage2D(P.g.TEXTURE_2D, 0, P.g.RGBA, P.g.RGBA, P.g.UNSIGNED_BYTE, orbCv)); orbReady = true; }
+        catch (e) { orbReady = false; }
+        panels.forEach(drawLens);
+      };
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+    };
     const drawLenses = () => { syncSize(); panels.forEach(drawLens);
       clearTimeout(settle); settle = setTimeout(() => { syncSize(); panels.forEach(drawLens); }, 140); };   // one clean redraw after the scroll stops
     if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) { P.on = e.isIntersecting; P.c.style.display = P.on ? "" : "none"; if (P.on) drawLens(P); } }), { rootMargin: "40px" }); panels.forEach(P => io.observe(P.el)); }
     else panels.forEach(P => P.on = true);
 
-    measureFixed(); measure(); drawSky(); drawLenses();
+    measureFixed(); measure(); drawSky(); drawLenses(); snapOrbit(); setInterval(snapOrbit, 1000);
     // the sky is static (drawn once, and on resize); the lenses redraw straight from the scroll event
     let dirty = false;
     const flush = () => { if (dirty) { dirty = false; drawSky(); drawLenses(); } };
