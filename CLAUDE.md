@@ -36,7 +36,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 | "Since ____" on the grid | Just "Collapsed" + year, with the chip covering the year's end. |
 | "Software that…" / "For Music, Fashion, Film, and whatever's next." | Current line: **"Solutions that waste less, last longer, and keep culture alive."** on **one row** on desktop. |
 | Film grain **on top of** the page | It dimmed every colour about 4% and killed the "futures." glow (and looked grainy when zoomed). The grain (`body::after`) must stay at **`z-index: -1`, behind the content**, as in the first orange version. |
-| Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." = `#fff3e0` with `text-shadow: 0 0 40px rgba(255,230,190,.5)`. |
+| Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." starts from `#fff3e0` with a 40px glow; the glow is now **adaptive** (see §4). |
 | "futures." over the pale part of the sky | The glow only reads over the orange. On phones it sits about 53 to 62% down the first screen (lower than the original 40 to 49%, which they asked for, but no lower). |
 | Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar). |
 | Replacing the sun's `box-shadow` glow with a gradient | Tried, to remove a faint rectangle on phones. It made the sun blotchy and "dead". **The sun is restored exactly to the original** (see `archive/first-orange/README.md`). The faint phone rectangle was in the original too; leave it. |
@@ -53,11 +53,12 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 ## 4. Page anatomy (`index.html`)
 
 Top to bottom:
-1. **Sky (fixed layers):** gradient sky, `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and film grain (`body::after`).
+1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and film grain (`body::after`).
 2. **`.nav`:** a sticky glass bar. It **tucks away when scrolling down and returns when scrolling up** (`.tucked`, small scroll script near the end).
 3. **Hero (`header.hero`):**
    - **Info row:** ● Signal live · Timeline inherited · Origin 2133 · UTC (live) · Sun–Earth km (live).
    - **`h1`:** "We / create / futures." (left-aligned; "futures." is light and glowing).
+   - **Adaptive glow** (script near the end): reads the sky colour behind "futures." from its height on screen (the sky is a fixed gradient) and sets `text-shadow` + colour inline. Over the dark orange it's the original 40px glow about 5% brighter; over the pale haze a tight white core and a wide warm bloom come in. The owner asked for this; don't go back to a static shadow.
    - **`#tele`:** the forecast panel.
    - **One-line copy.**
    - **`.orbit`:** a live solar system. It **rises from the bottom-right corner of the first screen** (`placeOrrery()`), so only part of it shows on load.
@@ -113,7 +114,7 @@ Failure mode: everything stays redacted ("Signal lost", ████, ··).
 1. **Open-Meteo's free tier is non-commercial.** This is a company site: get a paid key or ask them. A real licensing issue.
 2. **GDPR:** sending EU visitors' IP addresses to GeoJS with no consent is a grey area.
 3. **The live APIs have never been verified from the real site.** The cloud sandbox couldn't reach outside sites. Ask the owner what the live site shows (city or "Signal lost").
-4. **Liquid glass doesn't render on Safari / iOS.** The only full fix is WebGL.
+4. **Liquid glass doesn't render on Safari / iOS.** That includes **Chrome on iPhone**: every iOS browser is WebKit, not Chromium. The only full fix is WebGL.
 5. **Performance:** ~8 refracting glass panels, including the sticky nav. Unmeasured on real phones.
 6. **The "Scroll" hint collides with the planet labels** in the bottom-right on desktop since the solar system moved there.
 7. Cool cities often clamp to 2133 (the same as the origin). Consider a 45°C threshold if most visitors see 2133.
