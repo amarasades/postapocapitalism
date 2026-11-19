@@ -50,12 +50,12 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 - **"This is the one you can still change"** with **"Live"** in the 2026 footer.
 - The **location-based forecast** concept.
 - The **liquid glass** direction.
-- The vibrant **orange smoke sky + pale sun**.
+- The vibrant **orange sky + pale sun**. (The drifting smoke blobs were removed at the owner's request, for speed.)
 
 ## 4. Page anatomy (`index.html`)
 
 Top to bottom:
-1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and a flat multiply tint (`body::after`, replaces the old grain).
+1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), a flat multiply tint (`body::after`, replaces the old grain).
 2. **`.nav`:** a sticky glass bar. It **tucks away when scrolling down and returns when scrolling up** (`.tucked`, small scroll script near the end).
 3. **Hero (`header.hero`):**
    - **Info row:** ● Signal live · Timeline inherited · Origin 2133. (UTC and Sun–Earth distance were removed at the owner's request. On phones the row has extra bottom margin so "futures." stays where it was.)
@@ -98,9 +98,9 @@ Top to bottom:
 - **No painted outline, no painted colour.** The old 1.2px white border and white inset shadows read as "paint"; a baked RGB prism rim was rejected as "thick chromatic aberration looks like shit" — colour must come from the **background actually bending**. The rim (RIM module) is a soft **white** highlight computed per element from the rounded-rect distance field: lit where the bevel faces the light (above, a little right), a weaker reflection on the far side. Data-URL image in `--rim` on `.glass::before`, every browser.
 - **Lens (Chromium):** real backdrop refraction, bevel band 14–34px, displacement scale 40–110px, R ×1.4 / G ×1 / B ×.6 (strong, live aberration), blur .35.
 - **GL SKY + GL GLASS (Safari, every iPhone browser, Firefox; wherever LG is off).** Two layers, on purpose:
-  1. `canvas.glsky`: one fixed full-screen WebGL canvas (1 px per css px) draws sky, sun and smoke (faithful copy of the CSS layers, which stay laid out but hidden via `html.glbg`; mean difference ~2 levels). It **doesn't depend on scroll**, so it can't trail anything; it redraws ~15 fps for the smoke.
+  1. `canvas.glsky`: one fixed full-screen WebGL canvas (1 px per css px) draws sky and sun (faithful copy of the CSS layers, which stay laid out but hidden via `html.glbg`). Nothing in it moves, so it's drawn once and on resize only.
   2. `canvas.lens` inside **each** `.glass` (z −1): scrolls with the panel, so its edge is always exactly on the panel. Draws the same scene bent through the bevel (R ×1.32 / G ×1 / B ×.68 **saturated rainbow — owner loves it**) plus the panel's own tint gradient, fading out at the inner end of the bevel. Redrawn from the scroll event; a late frame only makes the picture inside the bend a frame old, never the geometry.
-  - Rejected / why: one per-panel redraw of a *guessed* sky (grey bands); one fullscreen canvas doing the bend + brightening (the brightened box trailed panels on fast scroll, and a square showed in the chip). Glass does **no backdrop blur** here (was the main iPhone cost). Chip area skipped via `tele._chip`. Smoke clocks read once from the CSS animations. Preview in Chrome with **`?glass=gl`**, plain fallback with **`?glass=plain`**.
+  - Rejected / why: one per-panel redraw of a *guessed* sky (grey bands); one fullscreen canvas doing the bend + brightening (the brightened box trailed panels on fast scroll, and a square showed in the chip). Glass does **no backdrop blur** here (was the main iPhone cost). Chip area skipped via `tele._chip`. Each `.glass` gets `isolation: isolate` here so its lens canvas always sits on the panel's background and under its content (without it the canvas landed under the page tint or the panel tint depending on the panel: a doubled-tint frame). The lens multiplies by the page tint (246,242,239) itself. The lens doesn't skip the chip area (the clip-path cuts it; skipping drew a seam). Preview in Chrome with **`?glass=gl`**, plain fallback with **`?glass=plain`**.
 - **Frost is minimal:** `.glass` fill .06/.01/.03, fallback blur 3px; `.tele` .19/.07/.1; `.tele.now` .38/.14/.06.
 - Filters are rebuilt on resize. New ones are created *before* the old ones are removed, to avoid a flash.
 - **Fallback:** GL LENS (below) plus `blur(1.5px) brightness(1.04)`.

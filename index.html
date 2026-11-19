@@ -39,11 +39,6 @@
   .sun { position: fixed; z-index: -3; pointer-events: none; width: min(34vmin, 300px); aspect-ratio: 1; border-radius: 50%; right: 14vw; top: 20vh;
     background: radial-gradient(circle, var(--sun) 0 58%, rgba(255,226,180,.55) 64%, transparent 72%); filter: blur(1.5px);
     box-shadow: 0 0 120px 60px rgba(255, 190, 120, .35); opacity: .9; }
-  .smoke { position: fixed; inset: -10%; z-index: -3; pointer-events: none; overflow: hidden; }
-  .smoke i { position: absolute; border-radius: 50%; filter: blur(70px); background: rgba(90, 40, 20, .35); animation: roll 70s linear infinite; }
-  .smoke i:nth-child(1) { width: 70vw; height: 30vh; top: 10%; left: -30%; }
-  .smoke i:nth-child(2) { width: 60vw; height: 24vh; top: 38%; left: -40%; background: rgba(255, 220, 170, .25); animation-duration: 95s; animation-delay: -40s; }
-  .smoke i:nth-child(3) { width: 80vw; height: 28vh; top: 66%; left: -50%; background: rgba(110, 50, 25, .25); animation-duration: 120s; animation-delay: -70s; }
   @keyframes roll { to { transform: translateX(170vw); } }
   /* Safari 26 (iOS) ignores theme-color and paints its top and bottom bars with the background-color of a fixed element
      touching that edge. The sky is a gradient with no colour, so it fell back to the body's flat orange. These two strips
@@ -67,10 +62,12 @@
     background: var(--rim, none) center / 100% 100% no-repeat; }
   .glsky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; }
   .glass > .lens { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; border-radius: inherit; }
-  html.glbg .sky, html.glbg .sun, html.glbg .smoke { visibility: hidden; }
+  html.glbg .sky, html.glbg .sun { visibility: hidden; }
   /* on the GL path the glass doesn't blur the backdrop: re-blurring 7 panels over a canvas that changes every frame was
      the main cost on iPhone */
-  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }   /* still laid out and animating: the GL sky reads them */
+  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; isolation: isolate; }
+  /* isolate: each panel is its own layer, so its lens canvas (z −1) always sits on the panel's background and under its
+     content. without it the canvas fell under the page tint or the panel tint depending on the panel: a doubled-tint frame */   /* still laid out and animating: the GL sky reads them */
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -273,7 +270,6 @@
 <div class="sky" aria-hidden="true"></div>
 <div class="edge t" aria-hidden="true"></div><div class="edge b" aria-hidden="true"></div>
 <div class="sun" aria-hidden="true"></div>
-<div class="smoke" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <div class="wrap nav">
   <div class="glass">
@@ -886,8 +882,8 @@
   })();
 
   /* ---------- GL SKY + GL GLASS (iPhone, Safari, Firefox: browsers that can't bend the backdrop) ----------
-     1. one fixed full-screen WebGL canvas draws the sky, sun and smoke (a faithful copy of the CSS layers, then hidden).
-        it never depends on scroll, so it can't lag behind anything; it only redraws for the drifting smoke.
+     1. one fixed full-screen WebGL canvas draws the sky and sun (a faithful copy of the CSS layers, then hidden).
+        nothing in it moves, so it's drawn once (and on resize) and can't lag behind anything.
      2. every glass panel has its own small WebGL canvas, inside the panel, so it scrolls WITH the panel: its edge is always
         exactly on the panel's edge. it draws the same scene, bent through the panel's bevel (red / green / blue bent by
         different amounts), plus the panel's own tint, and fades into the real thing at the inner end of the bevel.
@@ -896,10 +892,8 @@
   (() => {
     if (LG || !window.WebGLRenderingContext || /glass=plain/.test(location.search)) return;
     const COMMON = `precision highp float;
-      uniform vec2 uVp; uniform vec3 uSun; uniform vec4 uB1, uB2, uB3;
+      uniform vec2 uVp; uniform vec3 uSun;
       float erf_(float x){ float x2 = x*x, a = .147; float t = sqrt(1. - exp(-x2*(1.2732 + a*x2)/(1. + a*x2))); return x < 0. ? -t : t; }
-      float blob(vec2 p, vec4 b){ vec2 r = b.zw, q = p - b.xy; float k1 = length(q/r), k2 = length(q/(r*r)); float d = k2 > 0. ? k1*(k1 - 1.)/k2 : -min(r.x, r.y);
-        return .5 * (1. - erf_(d / 98.995)); }                       // blur(70px): gaussian falloff from the ellipse's edge
       vec3 sky(float t){ t = clamp(t, 0., 1.);
         vec3 c0=vec3(122.,46.,20.)/255., c1=vec3(185.,89.,42.)/255., c2=vec3(217.,138.,69.)/255., c3=vec3(236.,192.,138.)/255., c4=vec3(243.,220.,184.)/255.;
         if (t < .28) return mix(c0, c1, t/.28); if (t < .55) return mix(c1, c2, (t-.28)/.27); if (t < .78) return mix(c2, c3, (t-.55)/.23); return mix(c3, c4, (t-.78)/.22); }
@@ -911,9 +905,6 @@
         vec4 disc = d < .41*S ? vec4(sc, 1.) : d < .4525*S ? mix(vec4(sc, 1.), vec4(rc, .55), (d - .41*S)/(.0425*S)) : mix(vec4(rc, .55), vec4(rc, 0.), clamp((d - .4525*S)/(.0565*S), 0., 1.));
         vec4 sun = mix(disc, glow, smoothstep(Rs - 2.2, Rs + .5, d));
         c = mix(c, sun.rgb, sun.a * .9);
-        c = mix(c, vec3(90.,40.,20.)/255., .35 * blob(p, uB1));
-        c = mix(c, vec3(255.,220.,170.)/255., .25 * blob(p, uB2));
-        c = mix(c, vec3(110.,50.,25.)/255., .25 * blob(p, uB3));
         return c; }`;
     const SKY_FS = COMMON + `
       void main(){ gl_FragColor = vec4(scene(vec2(gl_FragCoord.x, uVp.y - gl_FragCoord.y)), 1.); }`;
@@ -923,13 +914,14 @@
         vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y), h = uSize * .5;
         vec2 q = abs(lp - h) - (h - uR);
         float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - uR);
-        if (dd < 0. || dd > uBev || (uChip.z > 0. && lp.x > uChip.x && lp.y > uChip.y)) { gl_FragColor = vec4(0.); return; }
+        if (dd < 0. || dd > uBev) { gl_FragColor = vec4(0.); return; }   // (the chip is cut out of the whole panel by its clip-path)
         vec2 g = max(abs(lp - h) - (h - max(uR, uBev + 1.)), 0.) * sign(lp - h);
         vec2 p = uOrigin + lp, off = length(g) > 0. ? -normalize(g) : vec2(0.);
         float t = 1. - clamp(dd / uBev, 0., 1.), m = t*t*(3. - 2.*t)*t;
         off *= m * uScale;
         vec3 c = vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b);
         c = mix(scene(p), c, smoothstep(0., 2., dd));                       // ease in over the outer 2px: no stair-steps
+        c *= vec3(246.,242.,239.)/255.;   // the page's multiply tint (body::after) sits over the sky but under this canvas
         // the panel's own tint (the CSS background gradient, 160deg), which this canvas sits on top of
         vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uSize.x + .9397*uSize.y) + .5;
         vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
@@ -947,7 +939,7 @@
       const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
       const U = {}; names.forEach(k => U[k] = gl.getUniformLocation(pr, k)); return U;
     };
-    const SCENE_U = ["uVp", "uSun", "uB1", "uB2", "uB3"];
+    const SCENE_U = ["uVp", "uSun"];
     const opts = { antialias: false, depth: false, stencil: false, powerPreference: "high-performance" };
 
     // 1. the sky
@@ -955,18 +947,12 @@
     const gl = cv.getContext("webgl", { ...opts, alpha: false });
     if (!gl) return;
     const SU = program(gl, SKY_FS, SCENE_U); if (!SU) return;
-    const skyEl = document.querySelector(".sky"), sunEl = document.querySelector(".sun"), blobs = [...document.querySelectorAll(".smoke i")];
+    const skyEl = document.querySelector(".sky"), sunEl = document.querySelector(".sun");
     skyEl.after(cv); document.documentElement.classList.add("glbg");
-    const SMOKE = [{ top: .10, left: -.30, w: 70, h: 30, dur: 70, delay: 0 }, { top: .38, left: -.40, w: 60, h: 24, dur: 95, delay: -40 }, { top: .66, left: -.50, w: 80, h: 28, dur: 120, delay: -70 }];
-    const t0 = performance.now(), base = blobs.map(el => { const a = el.getAnimations ? el.getAnimations()[0] : null; return a && a.currentTime != null ? +a.currentTime : 0; });
-    let vw = 0, vh = 0, sun = [0, 0, 0], B = [[0, 0, 1, 1], [0, 0, 1, 1], [0, 0, 1, 1]];
+    let vw = 0, vh = 0, sun = [0, 0, 0];
     const measureFixed = () => { const r = skyEl.getBoundingClientRect(); vw = r.width; vh = r.height; cv.width = Math.round(vw); cv.height = Math.round(vh);
       const s = sunEl.getBoundingClientRect(); sun = [s.left + s.width / 2, s.top + s.height / 2, s.width]; };
-    const tick = () => { const now = performance.now() - t0;
-      B = SMOKE.map((b, i) => { const ms = base[i] + now, prog = (((ms / 1000 - b.delay) % b.dur) + b.dur) % b.dur / b.dur;
-        const W = vw * 1.2, H = vh * 1.2, hw = b.w / 100 * vw / 2, hh = b.h / 100 * vh / 2;
-        return [-.1 * vw + b.left * W + prog * 1.7 * vw + hw, -.1 * vh + b.top * H + hh, hw, hh]; }); };
-    const setScene = (g, U) => { g.uniform2f(U.uVp, vw, vh); g.uniform3f(U.uSun, sun[0], sun[1], sun[2]); g.uniform4fv(U.uB1, B[0]); g.uniform4fv(U.uB2, B[1]); g.uniform4fv(U.uB3, B[2]); };
+    const setScene = (g, U) => { g.uniform2f(U.uVp, vw, vh); g.uniform3f(U.uSun, sun[0], sun[1], sun[2]); };
     const drawSky = () => { gl.viewport(0, 0, cv.width, cv.height); setScene(gl, SU); gl.drawArrays(gl.TRIANGLES, 0, 3); };
 
     // 2. the glass: one small canvas per panel, inside it
@@ -995,17 +981,17 @@
     };
     const drawLenses = () => panels.forEach(drawLens);
 
-    measureFixed(); measure(); tick(); drawSky(); drawLenses();
-    // the sky only needs the smoke (~15 fps); the lenses also redraw straight from the scroll event
-    let last = 0, dirty = false;
-    const loop = now => { if (dirty || now - last > 66) { tick(); drawSky(); drawLenses(); last = now; dirty = false; } requestAnimationFrame(loop); };
-    requestAnimationFrame(loop);
+    measureFixed(); measure(); drawSky(); drawLenses();
+    // nothing in the sky moves now (no smoke): it's drawn once and only again on resize. lenses redraw on scroll
+    let dirty = false;
+    const flush = () => { if (dirty) { dirty = false; drawSky(); drawLenses(); } };
+    const later = () => { if (!dirty) { dirty = true; requestAnimationFrame(flush); } };
     addEventListener("scroll", drawLenses, { passive: true });
-    addEventListener("resize", () => { measureFixed(); measure(); dirty = true; });
-    if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); dirty = true; }).observe(document.body);
+    addEventListener("resize", () => { measureFixed(); measure(); later(); });
+    if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); later(); }).observe(document.body);
     if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) P.on = e.isIntersecting; }), { rootMargin: "80px" }); panels.forEach(P => io.observe(P.el)); }
-    if (document.fonts) document.fonts.ready.then(() => { measure(); dirty = true; });
-    window.glSkyDirty = () => { dirty = true; };
+    if (document.fonts) document.fonts.ready.then(() => { measure(); later(); });
+    window.glSkyDirty = later;
   })();
 
   /* ---------- damage: only the inherited glass is broken ----------
