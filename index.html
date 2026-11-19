@@ -777,7 +777,7 @@
   /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
   const LG = (() => {
     const ua = navigator.userAgent;
-    if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua) || /glass=gl/.test(location.search)) return null;
+    if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua) || /glass=(gl|plain)/.test(location.search)) return null;
     document.documentElement.classList.add("lg");
     const defs = $("lg-defs");
     // displacement map: every pixel near an edge samples the backdrop from further inside, like a lens
@@ -890,7 +890,9 @@
      bent through a lens, red / green / blue bent by different amounts. it's live: it follows the sun as you scroll.
      one shared WebGL context renders every panel in turn and copies the result into a small canvas inside it. */
   (() => {
-    if (LG) return;
+    // OFF by default: on a real iPhone the redrawn sky never matched closely enough and showed as grey bands at the top-left
+    // edges (owner, Safari). kept only for experiments: add ?glass=gl to the address to turn it on
+    if (LG || !/glass=gl/.test(location.search)) return;
     if (!window.WebGLRenderingContext) return;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
     const FS = `precision highp float;
