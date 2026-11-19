@@ -66,8 +66,8 @@ Top to bottom:
    - **`.orbit`:** a live solar system. It **rises from the bottom-right corner of the first screen** (`placeOrrery()`), so only part of it shows on load.
    - **Phones:** the first screen is just the headline, sun and solar system. The forecast comes after scrolling.
 4. **`#modules`:** product cards. Each has a header bar, an animated mini-diagram, a small kind label and the name. (The "Cancels: ___" lines and the hero's "Scroll" hint were removed by the owner.) **Thumbnails animate on phones whenever on screen, on desktop only while hovered** (`.mod.on`; one rAF loop, reduced motion = still):
-   - **Sc3ne:** the sketch fans out to every stage on flowing dashed curves; every stage links to every other by arcs **above** the line that draw on in sequence with a travelling pulse, then fade; the ring steps through the stages.
-   - **R3mesher:** a turning, tilted globe with 8 meridians + 7 parallels. It "breathes" between scan and remeshed: the lines drift off even spacing, then snap back into a clean grid; QUAD % follows (61–98%).
+   - **Sc3ne:** no Sketch stage (the spec/tech pack already holds the sketch). The idea (top dot) feeds Spec, Sample and Prod on flowing dashed curves; Spec → Sample → Prod are chained by arcs **above** the line that draw on in sequence with a travelling pulse, then fade; the ring steps through the three stages.
+   - **R3mesher:** a turning, tilted globe with 8 full meridian circles (all the way round, like the parallels) + 7 parallels. It "breathes" between scan and remeshed: the lines drift off even spacing, then snap back into a clean grid; QUAD % follows (61–98%).
    - **Touch D3ck:** two waves between the decks (one fast and tight, one slow, wide, out of phase); platters turn only while live. No BPM label.
 5. **`#transmission`:** a paper section with a procedurally melted "pa" stamp. It's weak; it needs a hand-drawn SVG.
 6. **`#log`:** data-log rows.
