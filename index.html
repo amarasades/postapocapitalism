@@ -133,7 +133,8 @@
   /* bottom half: two compact rows on the left (air, grid), the biosphere as one big ring set on the right */
   .stats { margin: 12px 20px 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; padding-bottom: 14px; }
   .stat-col { display: flex; flex-direction: column; }
-  .stat { display: grid; grid-template-columns: 26px 34px minmax(0, 1fr); align-items: center; gap: 8px; padding: 13px 0; border-top: 1px dotted var(--ink-line); }
+  .stat { display: grid; grid-template-columns: 26px 34px minmax(0, 1fr); align-items: center; gap: 8px; padding: 12px 0; }
+  .stat + .stat { border-top: 1px dotted var(--ink-line); }
   .stat .k { color: var(--ink-dim); font-size: 10px; }
   .stat .v { text-align: right; white-space: nowrap; font: 500 13px/1 var(--sans); color: var(--ink-soft); }
   .stat .v b { font-weight: 600; font-size: 17px; letter-spacing: -.02em; color: var(--ink); margin-right: 5px; }
@@ -240,6 +241,8 @@
     .bio-k { font-size: 9px; top: -16px; }
     .bio-v b { font-size: 23px; }
     .stat { grid-template-columns: 22px 30px minmax(0, 1fr); gap: 8px; }
+    .stats { padding-bottom: 4px; } .stat { padding: 10px 0; }
+    .tele-foot { padding-top: 10px; padding-bottom: 11px; }
     .sico { width: 22px; height: 22px; }
     .stat .v b { font-size: 16px; margin-right: 4px; } /* the info row lost its second line (UTC, Sun–Earth): keep "futures." where it was */
   }
@@ -334,6 +337,7 @@
           </div>
           <div class="stat-col">
             <div class="stat"><span class="sico" id="t-aqi-ico" aria-hidden="true"></span><span class="k hud">AQI</span><span class="v"><b class="hot" id="t-aqi">··</b><span id="t-aqi-s"></span></span></div>
+            <div class="stat"><span class="sico" id="t-water-ico" aria-hidden="true"></span><span class="k hud">Water</span><span class="v"><b id="t-water">··</b><span id="t-water-s"></span></span></div>
             <div class="stat"><span class="sico" id="t-grid-ico" aria-hidden="true"></span><span class="k hud">Grid</span><span class="v"><b id="t-grid">··</b><span id="t-grid-s"></span></span></div>
           </div>
         </div>
@@ -625,6 +629,8 @@
     // stat icons. air: clear wind now, particulate-choked later. grid: a standing pylon now, a snapped one later
     air: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 12.5h15a4 4 0 1 0-4-4"/><path d="M4 18.5h20a4 4 0 1 1-4 4"/><path d="M4 24.5h8" opacity=".6"/></svg>`,
     airBad: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 12.5h15a4 4 0 1 0-4-4" opacity=".45"/><path d="M4 18.5h20a4 4 0 1 1-4 4" opacity=".45"/><g fill="currentColor" stroke="none"><circle cx="7" cy="7" r="1.3"/><circle cx="12" cy="15.5" r="1.6"/><circle cx="21" cy="14" r="1.1"/><circle cx="26.5" cy="9" r="1.4"/><circle cx="9" cy="22" r="1.1"/><circle cx="16" cy="27" r="1.5"/><circle cx="27" cy="28" r="1.1"/><circle cx="3.5" cy="28" r="1.3"/><circle cx="17.5" cy="21.5" r="1"/></g></svg>`,
+    water: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.5C12 9.5 8 14 8 19.5a8 8 0 0 0 16 0C24 14 20 9.5 16 3.5z"/><path d="M12.2 20.5a4 4 0 0 0 3.3 3.6" opacity=".6"/></svg>`,
+    waterBad: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.5C12 9.5 8 14 8 19.5a8 8 0 0 0 16 0C24 14 20 9.5 16 3.5z" stroke-dasharray="3 2.4"/><path d="M10.5 23.5q5.5-2.5 11 0" opacity=".8"/><path d="M16.5 9l-1.8 4.2 2.6 1.6-2 4.2"/></svg>`,
     grid: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 30 14.6 5M21 30 17.4 5M14.6 5 16 2.5 17.4 5M6 10h20M8.5 16h15M14.1 10l4.1 6M17.9 10l-4.1 6M13.2 16l6.4 8M18.8 16l-6.4 8M12.4 24h7.2M6 10v2.5M26 10v2.5M8.5 16v2.5M23.5 16v2.5"/><path d="M-4 14q5 2.5 10-1.5M26 12.5q5 4 10 1.5M-4 20.5q6 1.5 12.5-2M23.5 18.5q6 3.5 12.5 2" opacity=".55" stroke-width="1.1"/><g fill="#ffd98a" stroke="none" style="filter:drop-shadow(0 0 2.5px rgba(255,200,90,.95))"><circle cx="6" cy="12.5" r="1.3"/><circle cx="26" cy="12.5" r="1.3"/><circle cx="8.5" cy="18.5" r="1.3"/><circle cx="23.5" cy="18.5" r="1.3"/></g></svg>`,
     gridDown: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 30l1.9-12.5M21 30l-1.9-12.5M12.4 24h7.2M12.6 24l6.5-6.5M19.4 24l-6.5-6.5"/><g transform="rotate(-27 19.1 17.5) translate(.4 -1.6)"><path d="M12.9 17.5 14.6 5M19.1 17.5 17.4 5M14.6 5 16 2.5 17.4 5M6 10h20M14.1 10l4.1 6M17.9 10l-4.1 6M6 10v2.5M26 10v2.5"/><path d="M6 12.5l-.3 7.5M26 12.5l.5 5.5" opacity=".6" stroke-width="1.1"/></g></svg>`,
     lost: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="32" cy="32" r="20" stroke-dasharray="3 5"/><path d="M24 24l16 16M40 24L24 40"/></svg>`
@@ -660,6 +666,7 @@
         mode: "Forecast // inherited", year: year ?? "████", city, sub: year ? `${cc} · Unlivable by ${year}` : `${cc} · ████`, ico: S.loc ? fCond[0] : "lost",
         temp: fTemp ?? "··", cond: fTemp != null ? `<b>${fCond[1]}</b>Feels like ${fTemp + 7 + h % 6}°` : `<b>${fCond[1]}</b>`,
         aqi: fAqi, aqiS: fAqi >= 500 ? "Lethal" : "Hazardous",
+        water: "2 L", waterS: "Rationed",
         rings, bio: `${Math.round(rings.reduce((a, b) => a + b) / 3)}%`, bioS: "Left",
         grid: "Collapsed", gridS: year ? String(year - 6) : "",
         hint: hover ? "Hover to compare" : "Tap to compare", note: ""
@@ -669,6 +676,7 @@
         temp: S.curTemp != null ? Math.round(S.curTemp) : "—",
         cond: S.curTemp != null ? `<b>${nCond}</b>${S.feels != null ? `Feels like ${Math.round(S.feels)}°` : ""}` : "<b>No reading</b>",
         aqi: S.curAqi != null ? Math.round(S.curAqi) : "—", aqiS: S.curAqi != null ? aqiWord(S.curAqi) : "",
+        water: "Tap", waterS: "Drinkable",
         rings: [86, 71, 78], bio: "78%", bioS: "For now",
         grid: "Online", gridS: "24/7",
         hint: "This is the one you can still change", note: "Live"
@@ -690,11 +698,12 @@
     $("t-mode").textContent = v.mode; $("t-city").textContent = v.city; $("t-sub").textContent = v.sub;
     shiftYear(v.year);
     $("t-ico").innerHTML = I[v.ico]; $("t-temp").innerHTML = `${v.temp}<sup>°</sup>`; $("t-cond").innerHTML = v.cond;
-    $("t-aqi-ico").innerHTML = I[mode === "now" ? "air" : "airBad"]; $("t-grid-ico").innerHTML = I[mode === "now" ? "grid" : "gridDown"];
+    $("t-aqi-ico").innerHTML = I[mode === "now" ? "air" : "airBad"]; $("t-grid-ico").innerHTML = I[mode === "now" ? "grid" : "gridDown"]; $("t-water-ico").innerHTML = I[mode === "now" ? "water" : "waterBad"];
     $("t-aqi").textContent = v.aqi; $("t-aqi-s").textContent = v.aqiS;
     ["t-r1", "t-r2", "t-r3"].forEach((id, i) => $(id).setAttribute("stroke-dasharray", `${v.rings[i]} 100`));
     $("t-bio").textContent = v.bio; $("t-bio-s").textContent = v.bioS;
     $("t-grid").textContent = v.grid; $("t-grid-s").textContent = v.gridS;
+    $("t-water").textContent = v.water; $("t-water-s").textContent = v.waterS;
     $("t-hint").textContent = v.hint; $("t-note").textContent = v.note;
     tele.classList.toggle("now", mode === "now");
     if (typeof applyClip === "function") applyClip();
@@ -909,9 +918,16 @@
     const fs = getComputedStyle(ys); cctx.font = `${fs.fontWeight} ${fs.fontSize} ${fs.fontFamily}`;
     const yTxt = views ? String(views.future.gridS) : "2050", yw = Math.max(cctx.measureText(yTxt).width, 24);
     const yR = yr.right - tr.left, yT = yr.top - tr.top, yH = Math.max(yr.height, 13), yL = yR - yw;
-    const P0 = [w, yT - 16], P3 = [Math.max(w * .4, yL - (h - yT) * .95), h];  // a corner chip, as wide along the bottom as it is tall
-    const M = [yL - 6, yT + yH * .55];                        // the curve's middle passes just past the year's top-left: eats "…ed" a little
-    const C = [2 * M[0] - (P0[0] + P3[0]) / 2, 2 * M[1] - (P0[1] + P3[1]) / 2];
+    // the original chip's shape (84 × 52, rounded), scaled up evenly, no stretching, just until the year is inside it
+    const shape = k => { const CW = 84 * k, CH = 52 * k; return [[w, h - CH], [w - CW * .62, h - CH * .78], [w - CW, h]]; };
+    const inChip = ([A, B, D], [px, py]) => { const pts = [];
+      for (let t = 0; t <= 1.001; t += .05) pts.push([(1 - t) ** 2 * A[0] + 2 * (1 - t) * t * B[0] + t * t * D[0], (1 - t) ** 2 * A[1] + 2 * (1 - t) * t * B[1] + t * t * D[1]]);
+      pts.push([w, h]); let c = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) c = !c; }
+      return c; };
+    const must = [[yL - 1, yT + yH * .6], [yL + yw * .3, yT - 3], [yR + 2, yT - 4], [yL - 1, yT + yH]];  // all of the year (with room for the jagged edge), barely any of the word
+    let k = 1; while (k < 5 && !must.every(q => inChip(shape(k), q))) k += .04;
+    const [P0, C, P3] = shape(k);
     const N = Math.max(15, Math.round((Math.hypot(P0[0] - C[0], P0[1] - C[1]) + Math.hypot(C[0] - P3[0], C[1] - P3[1])) / 9)), ts = [];  // flakes stay small however big the chip is
     for (let i = 1; i < N; i++) ts.push(i / N + rr(-.28, .28) / N);              // uneven spacing: big and small flakes
     const vs = [P0];
