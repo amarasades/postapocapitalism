@@ -58,13 +58,14 @@
   /* ---------- weathered glass ---------- */
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
     background: linear-gradient(160deg, rgba(255,248,238,.06), rgba(255,240,220,.01) 45%, rgba(255,240,220,.03));
-    backdrop-filter: blur(3px) brightness(1.04); -webkit-backdrop-filter: blur(3px) brightness(1.04);
+    backdrop-filter: blur(1.5px) brightness(1.04); -webkit-backdrop-filter: blur(1.5px) brightness(1.04);
     box-shadow: inset 0 0 24px rgba(255,250,240,.08), 0 18px 44px -22px rgba(60, 20, 5, .5); }
   /* no painted outline. the rim light is computed per element from the glass's own shape (see RIM in the script):
      each pixel of the curved bevel is lit by how much it faces the light, the far side catches a weaker internal reflection,
      and red / green / blue peak at slightly different depths, so the highlight splits like a prism */
   .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
     background: var(--rim, none) center / 100% 100% no-repeat; }
+  .glass > .lens { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; border-radius: inherit; }
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -768,7 +769,7 @@
   /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
   const LG = (() => {
     const ua = navigator.userAgent;
-    if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua)) return null;
+    if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua) || /glass=gl/.test(location.search)) return null;
     document.documentElement.classList.add("lg");
     const defs = $("lg-defs");
     // displacement map: every pixel near an edge samples the backdrop from further inside, like a lens
@@ -847,8 +848,9 @@
   (() => {
     const L = [.42, -.91];                                   // light from above, a little to the right (where the sun is)
     // soft everywhere: a broad band that rises and falls (no hard start at the edge), a faint glow, faded to nothing by 22px
-    const prof = d => { const e = d + 4; if (e < 0 || d > 22) return 0; const win = (1 - Math.max(0, d) / 22) ** 2;
-      return (.6 * Math.exp(-(((d - 1.5) / 3.4) ** 2)) + .16 * Math.exp(-Math.max(0, d) / 7)) * win; };  // a thick bevel: a broad bright band, a soft glow inside it
+    // a soft white highlight on the curve of the edge. no painted colour: colour only comes from the real (or drawn) background bending
+    const prof = d => { if (d < -2 || d > 18) return 0; const win = (1 - Math.max(0, d) / 18) ** 2;
+      return (.5 * Math.exp(-(((d - .9) / 1.7) ** 2)) + .12 * Math.exp(-Math.max(0, d) / 6)) * win; };  // a thick bevel: a broad bright band, a soft glow inside it
     function rim(el) {
       const w = el.offsetWidth, h = el.offsetHeight; if (!w || !h) return;
       const k = Math.min(devicePixelRatio || 1, 2), W = Math.round(w * k), H = Math.round(h * k);
@@ -861,13 +863,12 @@
         if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; d = r - l; nx = qx / l * Math.sign(px - cx); ny = qy / l * Math.sign(py - cy); }
         else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
         else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
-        if (d > 22) continue;
+        if (d > 18) continue;
         const f = nx * L[0] + ny * L[1], lit = f > 0 ? f ** 1.6 : 0, back = f < 0 ? (-f) ** 2.2 * .42 : 0, g = lit + back + .05;
         // the prism: each colour comes off the bevel at a slightly different depth
-        const R = g * prof(d), G = g * prof(d - 1.8), B = g * prof(d - 3.6), a = Math.min(1, Math.max(R, G, B));  // the colours fan out through the thickness
+        const a = Math.min(1, g * prof(d));
         if (a < .004) continue;
-        const i = (Y * W + X) * 4, tint = c0 => 255 * (.58 + .42 * Math.min(1, c0 / a));   // mostly white light, a fringe of colour
-        D[i] = tint(R); D[i + 1] = tint(G); D[i + 2] = tint(B); D[i + 3] = 255 * a;
+        const i = (Y * W + X) * 4; D[i] = D[i + 1] = D[i + 2] = 255; D[i + 3] = 255 * a;
       }
       c.putImageData(img, 0, 0);
       el.style.setProperty("--rim", `url(${cv.toDataURL()})`);
@@ -875,6 +876,79 @@
     const els = document.querySelectorAll(".glass");
     const ro = "ResizeObserver" in window ? new ResizeObserver(es => es.forEach(e => rim(e.target))) : null;
     els.forEach(el => { rim(el); ro?.observe(el); });
+  })();
+
+  /* ---------- GL LENS: real-looking refraction where the browser can't bend the backdrop (iPhone, Safari, Firefox) ----------
+     the main thing behind the glass is our own sky and sun, which we know exactly, so each panel's bevel redraws them
+     bent through a lens, red / green / blue bent by different amounts. it's live: it follows the sun as you scroll.
+     one shared WebGL context renders every panel in turn and copies the result into a small canvas inside it. */
+  (() => {
+    if (LG) return;
+    const gc = document.createElement("canvas"), gl = gc.getContext("webgl", { premultipliedAlpha: true, antialias: false });
+    if (!gl) return;
+    const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+    const FS = `precision highp float;
+      uniform vec2 uSize, uOrigin, uVp, uSkyTop; uniform vec3 uSun; uniform float uR, uB, uScale, uDpr, uFbH, uFill;
+      vec3 sky(float t){ t=clamp(t,0.,1.);
+        vec3 c0=vec3(122.,46.,20.)/255., c1=vec3(185.,89.,42.)/255., c2=vec3(217.,138.,69.)/255., c3=vec3(236.,192.,138.)/255., c4=vec3(243.,220.,184.)/255.;
+        if(t<.28) return mix(c0,c1,t/.28); if(t<.55) return mix(c1,c2,(t-.28)/.27); if(t<.78) return mix(c2,c3,(t-.55)/.23); return mix(c3,c4,(t-.78)/.22); }
+      vec3 bg(vec2 p){
+        vec3 c = sky((p.y - uSkyTop.x) / uVp.y);
+        float sw = uSun.z, Rs = .5*sw, dist = length(p - uSun.xy);
+        float g = .315 * (1. - smoothstep(Rs - 60., Rs + 180., dist));
+        c = mix(c, vec3(1., 190./255., 120./255.), g);
+        vec3 sc = vec3(1., 241./255., 214./255.), rc = vec3(1., 226./255., 180./255.);
+        vec4 d = dist < .41*sw ? vec4(sc,1.) : dist < .452*sw ? mix(vec4(sc,1.), vec4(rc,.55), (dist-.41*sw)/(.042*sw)) : mix(vec4(rc,.55), vec4(rc,0.), clamp((dist-.452*sw)/(.057*sw),0.,1.));
+        d.a *= 1. - smoothstep(Rs - 2., Rs + 1., dist);
+        c = mix(c, d.rgb, d.a * .9);
+        return c * vec3(246.,242.,239.)/255.;
+      }
+      void main(){
+        vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y) / uDpr;
+        vec2 h = uSize * .5, q = abs(lp - h) - (h - uR);
+        float d = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - uR);
+        if (d < -1. || d > uB) { gl_FragColor = vec4(0.); return; }
+        vec2 s = sign(lp - h), n = (q.x > 0. && q.y > 0.) ? normalize(q) * s : (q.x > q.y ? vec2(s.x, 0.) : vec2(0., s.y));
+        float t = 1. - clamp(d / uB, 0., 1.), m = t * t * (3. - 2. * t) * t;
+        vec2 p = uOrigin + lp, off = -n * m * uScale;
+        vec3 col = vec3(bg(p + off * 1.25).r, bg(p + off).g, bg(p + off * .75).b) * 1.04;
+        col = mix(col, vec3(1., .96, .91), uFill);   // the panel's own light fill, so the bevel matches the clear middle
+        float a = (1. - smoothstep(uB * .4, uB, d)) * clamp(d + .5, 0., 1.);
+        gl_FragColor = vec4(col * a, a);
+      }`;
+    const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
+    gl.useProgram(pr);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = {}; ["uSize", "uOrigin", "uVp", "uSkyTop", "uSun", "uR", "uB", "uScale", "uDpr", "uFbH", "uFill"].forEach(k => U[k] = gl.getUniformLocation(pr, k));
+    const dpr = Math.min(devicePixelRatio || 1, 2), sunEl = document.querySelector(".sun"), skyEl = document.querySelector(".sky");
+    const panels = [...document.querySelectorAll(".glass")].map(el => { const c = document.createElement("canvas"); c.className = "lens"; c.setAttribute("aria-hidden", "true"); el.prepend(c); return { el, c, ctx: c.getContext("2d") }; });
+    function draw() {
+      const sr = sunEl.getBoundingClientRect(), kr = skyEl.getBoundingClientRect();
+      for (const P of panels) {
+        const r = P.el.getBoundingClientRect(), w = P.el.offsetWidth, h = P.el.offsetHeight;
+        if (!w || !h || r.bottom < -50 || r.top > innerHeight + 50) continue;
+        const W = Math.round(w * dpr), H = Math.round(h * dpr);
+        if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; }
+        if (gc.width < W || gc.height < H) { gc.width = Math.max(gc.width, W); gc.height = Math.max(gc.height, H); }
+        const rad = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, w / 2, h / 2), mn = Math.min(w, h);
+        gl.viewport(0, 0, W, H);
+        gl.uniform2f(U.uSize, w, h); gl.uniform2f(U.uOrigin, r.left, r.top); gl.uniform2f(U.uVp, kr.width, kr.height); gl.uniform2f(U.uSkyTop, kr.top, 0);
+        gl.uniform3f(U.uSun, sr.left + sr.width / 2, sr.top + sr.height / 2, sr.width);
+        gl.uniform1f(U.uR, rad); gl.uniform1f(U.uB, Math.max(14, Math.min(34, mn * .36))); gl.uniform1f(U.uScale, Math.min(110, Math.max(40, mn * .6)) * .5);
+        gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uFbH, H);
+        gl.uniform1f(U.uFill, P.el.classList.contains("tele") ? (P.el.classList.contains("now") ? .2 : .12) : .035);
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        P.ctx.clearRect(0, 0, W, H); P.ctx.drawImage(gc, 0, gc.height - H, W, H, 0, 0, W, H);
+      }
+    }
+    let queued = false; const queue = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; draw(); }); } };
+    addEventListener("scroll", queue, { passive: true }); addEventListener("resize", queue);
+    if ("ResizeObserver" in window) { const ro = new ResizeObserver(queue); panels.forEach(P => ro.observe(P.el)); }
+    if (document.fonts) document.fonts.ready.then(queue);
+    draw();
   })();
 
   /* ---------- damage: only the inherited glass is broken ----------

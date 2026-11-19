@@ -95,12 +95,13 @@ Top to bottom:
 ### Liquid glass (`LG` module)
 - **Real refraction, in Chromium only** (`backdrop-filter: url(#svgFilter)` isn't supported in Safari or Firefox, which includes every iPhone browser). The `html.lg` class is set when it's active.
 - **How it works:** a per-element displacement map is generated on a `<canvas>` from the rounded-rect signed distance field (plus the chip outline for `#tele`). It feeds an `feDisplacementMap` with an **RGB split** (chromatic aberration: R ×1.2, G ×.93, B ×.66 of the scale; the owner asked for more), a light blur, no saturation.
-- **No painted outline.** The old 1.2px white gradient border and white inset shadows read as "paint". The rim is now **computed per element (RIM module)** from the rounded-rect distance field: each bevel pixel is lit by how much it faces the light (from above, a little right, where the sun is), the far side gets a weaker internal reflection, and R/G/B peak at different depths (0 / 1.8 / 3.6px, each a soft Gaussian band ~3.4px wide peaking 1.5px inside the edge, faded to zero by 22px, ~58% white) = a **thick, soft** prism bevel. Rejected: narrow offsets ("thin glass"), narrow bands (separate rainbow stripes), a hard bright line right at the edge ("harsh lines"). It's a data-URL image in `--rim` on `.glass::before`, rebuilt on resize, and works in every browser.
-- **Lens (Chromium):** bevel band 14–34px, displacement scale 40–110px, R ×1.4 / G ×1 / B ×.6 (strong aberration), blur .35.
+- **No painted outline, no painted colour.** The old 1.2px white border and white inset shadows read as "paint"; a baked RGB prism rim was rejected as "thick chromatic aberration looks like shit" — colour must come from the **background actually bending**. The rim (RIM module) is a soft **white** highlight computed per element from the rounded-rect distance field: lit where the bevel faces the light (above, a little right), a weaker reflection on the far side. Data-URL image in `--rim` on `.glass::before`, every browser.
+- **Lens (Chromium):** real backdrop refraction, bevel band 14–34px, displacement scale 40–110px, R ×1.4 / G ×1 / B ×.6 (strong, live aberration), blur .35.
+- **GL LENS (everything else: Safari, every iPhone browser, Firefox):** those can't refract the backdrop, so one shared WebGL context redraws **our own sky gradient + sun (+ the multiply tint and the panel's fill)** inside each panel's bevel, bent through the same lens with the same R/G/B split, and copies it into a `canvas.lens` (z-index −1) in each `.glass`. Live: redrawn on scroll / resize, follows the sun. It doesn't see smoke, text or the orrery behind the glass (only Chromium does). Force it in Chrome for testing with **`?glass=gl`**. The fallback backdrop blur is 1.5px (was frosty at 5px).
 - **Frost is minimal:** `.glass` fill .06/.01/.03, fallback blur 3px; `.tele` .19/.07/.1; `.tele.now` .38/.14/.06.
 - Filters are rebuilt on resize. New ones are created *before* the old ones are removed, to avoid a flash.
-- **Fallback:** clear glass with `blur(5px) saturate(160%)`.
-- **Specular rim:** `.glass::before` (masked gradient border).
+- **Fallback:** GL LENS (below) plus `blur(1.5px) brightness(1.04)`.
+- **Specular rim:** `.glass::before`, the computed RIM image (no border).
 
 ### Solar system (`orrery()`)
 - **Real heliocentric positions** from JPL approximate Keplerian elements (no API), updated every second.
@@ -124,7 +125,7 @@ Failure mode: everything stays redacted ("Signal lost", ████, ··).
 1. **Open-Meteo's free tier is non-commercial.** This is a company site: get a paid key or ask them. A real licensing issue.
 2. **GDPR:** sending EU visitors' IP addresses to GeoJS with no consent is a grey area.
 3. **The live APIs have never been verified from the real site.** The cloud sandbox couldn't reach outside sites. Ask the owner what the live site shows (city or "Signal lost").
-4. **Liquid glass doesn't render on Safari / iOS.** That includes **Chrome on iPhone**: every iOS browser is WebKit, not Chromium. The only full fix is WebGL.
+4. **Liquid glass on Safari / iOS** (incl. Chrome on iPhone, all WebKit) is the GL LENS: it bends our sky and sun, but not text, smoke or the orrery behind the panels. Never verified on a real iPhone.
 5. **Performance:** ~8 refracting glass panels, including the sticky nav. Unmeasured on real phones.
 6. **The "Scroll" hint collides with the planet labels** in the bottom-right on desktop since the solar system moved there.
 7. Very cool, slow-warming places (e.g. Ushuaia) still reach the 2131 clamp. Rare.
