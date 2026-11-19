@@ -891,8 +891,7 @@
      one shared WebGL context renders every panel in turn and copies the result into a small canvas inside it. */
   (() => {
     if (LG) return;
-    const gc = document.createElement("canvas"), gl = gc.getContext("webgl", { premultipliedAlpha: true, antialias: false });
-    if (!gl) return;
+    if (!window.WebGLRenderingContext) return;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
     const FS = `precision highp float;
       uniform vec2 uSize, uOrigin, uVp, uSkyTop; uniform vec3 uSun; uniform float uR, uB, uScale, uDpr, uFbH, uFill;
@@ -918,43 +917,55 @@
         vec2 g = max(abs(lp - h) - (h - max(uR, uB + 1.)), 0.) * sign(lp - h), n = length(g) > 0. ? normalize(g) : vec2(0.);
         float t = 1. - clamp(d / uB, 0., 1.), m = t * t * (3. - 2. * t) * t;
         vec2 p = uOrigin + lp, off = -n * m * uScale;
-        vec3 col = vec3(bg(p + off * 1.25).r, bg(p + off).g, bg(p + off * .75).b) * 1.04;
+        vec3 col = vec3(bg(p + off * 1.25).r, bg(p + off).g, bg(p + off * .75).b);
         col = mix(col, vec3(1., .96, .91), uFill);   // the panel's own light fill, so the bevel matches the clear middle
-        float a = (1. - smoothstep(uB * .4, uB, d)) * clamp(d + .5, 0., 1.);
+        float a = (1. - smoothstep(uB * .18, uB * .62, d)) * clamp(d + .5, 0., 1.);   // the bend lives at the rim; it hands over to the real backdrop early
         gl_FragColor = vec4(col * a, a);
       }`;
-    const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
-    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
-    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
-    gl.useProgram(pr);
-    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    const U = {}; ["uSize", "uOrigin", "uVp", "uSkyTop", "uSun", "uR", "uB", "uScale", "uDpr", "uFbH", "uFill"].forEach(k => U[k] = gl.getUniformLocation(pr, k));
-    const dpr = Math.min(devicePixelRatio || 1, 2), sunEl = document.querySelector(".sun"), skyEl = document.querySelector(".sky");
-    const panels = [...document.querySelectorAll(".glass")].map(el => { const c = document.createElement("canvas"); c.className = "lens"; c.setAttribute("aria-hidden", "true"); el.prepend(c); return { el, c, ctx: c.getContext("2d") }; });
+    // one small WebGL canvas per panel, drawn in place (no copying between canvases: that readback was the lag on iPhone),
+    // at 1× resolution (the bent band is soft anyway), geometry cached and only re-read on resize
+    const sunEl = document.querySelector(".sun"), skyEl = document.querySelector(".sky"), K = 1;
+    const make = el => {
+      const c = document.createElement("canvas"); c.className = "lens"; c.setAttribute("aria-hidden", "true");
+      const gl = c.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true, preserveDrawingBuffer: false });
+      if (!gl) return null;
+      const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+      const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+      gl.useProgram(pr);
+      const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      const U = {}; ["uSize", "uOrigin", "uVp", "uSkyTop", "uSun", "uR", "uB", "uScale", "uDpr", "uFbH", "uFill"].forEach(k => U[k] = gl.getUniformLocation(pr, k));
+      el.prepend(c);
+      return { el, c, gl, U, w: 0, h: 0, rad: 0, visible: true };
+    };
+    const panels = [...document.querySelectorAll(".glass")].map(make).filter(Boolean);
+    if (!panels.length) return;
+    const measure = P => { P.w = P.el.offsetWidth; P.h = P.el.offsetHeight; P.rad = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
+      const W = Math.round(P.w * K), H = Math.round(P.h * K); if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; } };
+    panels.forEach(measure);
+    let sun = null, sky = null;
+    const measureFixed = () => { const sr = sunEl.getBoundingClientRect(), kr = skyEl.getBoundingClientRect(); sun = [sr.left + sr.width / 2, sr.top + sr.height / 2, sr.width]; sky = [kr.top, kr.width, kr.height]; };
+    measureFixed();
     function draw() {
-      const sr = sunEl.getBoundingClientRect(), kr = skyEl.getBoundingClientRect();
       for (const P of panels) {
-        const r = P.el.getBoundingClientRect(), w = P.el.offsetWidth, h = P.el.offsetHeight;
-        if (!w || !h || r.bottom < -50 || r.top > innerHeight + 50) continue;
-        const W = Math.round(w * dpr), H = Math.round(h * dpr);
-        if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; }
-        if (gc.width < W || gc.height < H) { gc.width = Math.max(gc.width, W); gc.height = Math.max(gc.height, H); }
-        const rad = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, w / 2, h / 2), mn = Math.min(w, h);
-        gl.viewport(0, 0, W, H);
-        gl.uniform2f(U.uSize, w, h); gl.uniform2f(U.uOrigin, r.left, r.top); gl.uniform2f(U.uVp, kr.width, kr.height); gl.uniform2f(U.uSkyTop, kr.top, 0);
-        gl.uniform3f(U.uSun, sr.left + sr.width / 2, sr.top + sr.height / 2, sr.width);
-        gl.uniform1f(U.uR, rad); gl.uniform1f(U.uB, Math.max(14, Math.min(34, mn * .36))); gl.uniform1f(U.uScale, Math.min(110, Math.max(40, mn * .6)) * .5);
-        gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uFbH, H);
-        gl.uniform1f(U.uFill, P.el.classList.contains("tele") ? (P.el.classList.contains("now") ? .2 : .12) : .035);
+        if (!P.visible || !P.w || !P.h) continue;
+        const r = P.el.getBoundingClientRect(), { gl, U } = P, mn = Math.min(P.w, P.h);
+        gl.viewport(0, 0, P.c.width, P.c.height);
+        gl.uniform2f(U.uSize, P.w, P.h); gl.uniform2f(U.uOrigin, r.left, r.top); gl.uniform2f(U.uVp, sky[1], sky[2]); gl.uniform2f(U.uSkyTop, sky[0], 0);
+        gl.uniform3f(U.uSun, sun[0], sun[1], sun[2]);
+        gl.uniform1f(U.uR, P.rad); gl.uniform1f(U.uB, Math.max(14, Math.min(34, mn * .36))); gl.uniform1f(U.uScale, Math.min(110, Math.max(40, mn * .6)) * .5);
+        gl.uniform1f(U.uDpr, K); gl.uniform1f(U.uFbH, P.c.height);
+        gl.uniform1f(U.uFill, P.el.classList.contains("tele") ? (P.el.classList.contains("now") ? .16 : .09) : 0);
         gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
-        P.ctx.clearRect(0, 0, W, H); P.ctx.drawImage(gc, 0, gc.height - H, W, H, 0, 0, W, H);
       }
     }
     let queued = false; const queue = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; draw(); }); } };
-    addEventListener("scroll", queue, { passive: true }); addEventListener("resize", queue);
-    if ("ResizeObserver" in window) { const ro = new ResizeObserver(queue); panels.forEach(P => ro.observe(P.el)); }
-    if (document.fonts) document.fonts.ready.then(queue);
+    addEventListener("scroll", queue, { passive: true });
+    addEventListener("resize", () => { measureFixed(); queue(); });
+    if ("ResizeObserver" in window) { const ro = new ResizeObserver(es => { es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) measure(P); }); queue(); }); panels.forEach(P => ro.observe(P.el)); }
+    if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => { es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) P.visible = e.isIntersecting; }); queue(); }, { rootMargin: "60px" }); panels.forEach(P => io.observe(P.el)); }
+    if (document.fonts) document.fonts.ready.then(() => { panels.forEach(measure); queue(); });
     draw();
   })();
 
