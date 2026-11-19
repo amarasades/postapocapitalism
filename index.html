@@ -61,13 +61,10 @@
   .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
     background: var(--rim, none) center / 100% 100% no-repeat; }
   .glsky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; }
-  .glass > .lens { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; border-radius: inherit; }
   html.glbg .sky, html.glbg .sun { visibility: hidden; }
   /* on the GL path the glass doesn't blur the backdrop: re-blurring 7 panels over a canvas that changes every frame was
      the main cost on iPhone */
-  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; isolation: isolate; }
-  /* isolate: each panel is its own layer, so its lens canvas (z −1) always sits on the panel's background and under its
-     content. without it the canvas fell under the page tint or the panel tint depending on the panel: a doubled-tint frame */   /* still laid out and animating: the GL sky reads them */
+  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }   /* still laid out and animating: the GL sky reads them */
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -906,28 +903,35 @@
         vec4 sun = mix(disc, glow, smoothstep(Rs - 2.2, Rs + .5, d));
         c = mix(c, sun.rgb, sun.a * .9);
         return c; }`;
+    const N = 8;
     const SKY_FS = COMMON + `
-      void main(){ gl_FragColor = vec4(scene(vec2(gl_FragCoord.x, uVp.y - gl_FragCoord.y)), 1.); }`;
-    const LENS_FS = COMMON + `
-      uniform vec2 uOrigin, uSize; uniform float uR, uBev, uScale, uFbH; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2;
+      uniform vec4 uP[${N}], uG[${N}], uC[${N}]; uniform int uN;
       void main(){
-        vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y), h = uSize * .5;
-        vec2 q = abs(lp - h) - (h - uR);
-        float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - uR);
-        if (dd < 0. || dd > uBev) { gl_FragColor = vec4(0.); return; }   // (the chip is cut out of the whole panel by its clip-path)
-        vec2 g = max(abs(lp - h) - (h - max(uR, uBev + 1.)), 0.) * sign(lp - h);
-        vec2 p = uOrigin + lp, off = length(g) > 0. ? -normalize(g) : vec2(0.);
-        float t = 1. - clamp(dd / uBev, 0., 1.), m = t*t*(3. - 2.*t)*t;
-        off *= m * uScale;
-        vec3 c = vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b);
-        c = mix(scene(p), c, smoothstep(0., 2., dd));                       // ease in over the outer 2px: no stair-steps
-        c *= vec3(246.,242.,239.)/255.;   // the page's multiply tint (body::after) sits over the sky but under this canvas
-        // the panel's own tint (the CSS background gradient, 160deg), which this canvas sits on top of
-        vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uSize.x + .9397*uSize.y) + .5;
-        vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
-        c = mix(c, f.rgb, f.a);
-        float a = 1. - smoothstep(uBev * .8, uBev, dd);                     // hands over to the real (identical) thing
-        gl_FragColor = vec4(c * a, a);
+        vec2 p = vec2(gl_FragCoord.x, uVp.y - gl_FragCoord.y);
+        // find the panel bevel this pixel is in (if any); the scene is evaluated after the loop, not inside it
+        float edge = 0.; vec2 off = vec2(0.);
+        for (int i = 0; i < ${N}; i++) {
+          if (i >= uN) break;
+          vec4 R = uP[i], G = uG[i];
+          vec2 lp = p - R.xy, h = R.zw * .5;
+          if (lp.x < 0. || lp.y < 0. || lp.x > R.z || lp.y > R.w) continue;
+          vec2 q = abs(lp - h) - (h - G.x);
+          float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - G.x);
+          if (dd < 0.) continue;
+          if (dd <= G.y && !(uC[i].z > 0. && lp.x > uC[i].x && lp.y > uC[i].y)) {
+            vec2 g = max(abs(lp - h) - (h - max(G.x, G.y + 1.)), 0.) * sign(lp - h);
+            if (length(g) > 0.) {
+              float t = 1. - clamp(dd / G.y, 0., 1.), m = t*t*(3. - 2.*t)*t;
+              off = -normalize(g) * m * G.z;
+              edge = smoothstep(0., 2., dd);
+            }
+          }
+          break;
+        }
+        vec3 c = scene(p);
+        // only the bend, no brightening or tint: away from the sun it changes nothing, so a frame of lag can't show
+        if (edge > 0.) c = mix(c, vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b), edge);
+        gl_FragColor = vec4(c, 1.);
       }`;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
     const program = (gl, fs, names) => {
@@ -946,50 +950,43 @@
     const cv = document.createElement("canvas"); cv.className = "glsky"; cv.setAttribute("aria-hidden", "true");
     const gl = cv.getContext("webgl", { ...opts, alpha: false });
     if (!gl) return;
-    const SU = program(gl, SKY_FS, SCENE_U); if (!SU) return;
+    const SU = program(gl, SKY_FS, [...SCENE_U, "uP", "uG", "uC", "uN"]); if (!SU) return;
     const skyEl = document.querySelector(".sky"), sunEl = document.querySelector(".sun");
     skyEl.after(cv); document.documentElement.classList.add("glbg");
     let vw = 0, vh = 0, sun = [0, 0, 0];
     const measureFixed = () => { const r = skyEl.getBoundingClientRect(); vw = r.width; vh = r.height; cv.width = Math.round(vw); cv.height = Math.round(vh);
       const s = sunEl.getBoundingClientRect(); sun = [s.left + s.width / 2, s.top + s.height / 2, s.width]; };
     const setScene = (g, U) => { g.uniform2f(U.uVp, vw, vh); g.uniform3f(U.uSun, sun[0], sun[1], sun[2]); };
-    const drawSky = () => { gl.viewport(0, 0, cv.width, cv.height); setScene(gl, SU); gl.drawArrays(gl.TRIANGLES, 0, 3); };
 
-    // 2. the glass: one small canvas per panel, inside it
-    const FILL = { glass: [[255, 248, 238, .06], [255, 240, 220, .01], [255, 240, 220, .03]], tele: [[255, 248, 238, .19], [255, 240, 220, .07], [255, 240, 220, .1]], now: [[240, 246, 255, .38], [225, 236, 255, .14], [225, 236, 255, .06]] };
-    const LENS_U = [...SCENE_U, "uOrigin", "uSize", "uR", "uBev", "uScale", "uFbH", "uChip", "uF0", "uF1", "uF2"];
-    const panels = [...document.querySelectorAll(".glass")].map(el => {
-      const c = document.createElement("canvas"); c.className = "lens"; c.setAttribute("aria-hidden", "true");
-      const g = c.getContext("webgl", { ...opts, alpha: true, premultipliedAlpha: true }); if (!g) return null;
-      const U = program(g, LENS_FS, LENS_U); if (!U) return null;
-      el.prepend(c);
-      return { el, c, g, U, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0, on: true };
-    }).filter(Boolean);
+    // 2. the glass: panel geometry for the bend (cached document positions; only the sticky nav is measured live)
+    const panels = [...document.querySelectorAll(".glass")].map(el => ({ el, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0 }));
     const measure = () => panels.forEach(P => { const b = P.el.getBoundingClientRect(); P.x = b.left; P.y = b.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight;
-      P.r = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
-      const W = Math.round(P.w), H = Math.round(P.h); if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; } });
-    const drawLens = P => {
-      if (!P.on || !P.w) return;
-      const { g, U } = P, b = P.moves ? P.el.getBoundingClientRect() : { left: P.x, top: P.y - scrollY }, mn = Math.min(P.w, P.h);
-      g.viewport(0, 0, P.c.width, P.c.height); setScene(g, U);
-      g.uniform2f(U.uOrigin, b.left, b.top); g.uniform2f(U.uSize, P.w, P.h); g.uniform1f(U.uR, P.r); g.uniform1f(U.uFbH, P.c.height);
-      g.uniform1f(U.uBev, Math.max(14, Math.min(34, mn * .36))); g.uniform1f(U.uScale, Math.min(110, Math.max(40, mn * .6)) * .5);
-      const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
-      const F = P.el === tele ? (mode === "now" ? FILL.now : FILL.tele) : FILL.glass;
-      [U.uF0, U.uF1, U.uF2].forEach((u, i) => g.uniform4f(u, F[i][0] / 255, F[i][1] / 255, F[i][2] / 255, F[i][3]));
-      g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
+      P.r = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2); });
+    const P4 = new Float32Array(N * 4), G4 = new Float32Array(N * 4), C4 = new Float32Array(N * 4);
+    const drawSky = () => {
+      let n = 0; P4.fill(0); G4.fill(0); C4.fill(0);
+      for (const P of panels) {
+        if (n >= N || !P.w) continue;
+        const b = P.moves ? P.el.getBoundingClientRect() : { left: P.x, top: P.y - scrollY };
+        if (b.top > vh || b.top + P.h < 0) continue;
+        const mn = Math.min(P.w, P.h);
+        P4.set([b.left, b.top, P.w, P.h], n * 4);
+        G4.set([P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .5, 0], n * 4);
+        if (P.el === tele && mode === "future" && tele._chip) C4.set([tele._chip[0], tele._chip[1], 1, 0], n * 4);
+        n++;
+      }
+      gl.viewport(0, 0, cv.width, cv.height); setScene(gl, SU);
+      gl.uniform4fv(SU.uP, P4); gl.uniform4fv(SU.uG, G4); gl.uniform4fv(SU.uC, C4); gl.uniform1i(SU.uN, n);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
-    const drawLenses = () => panels.forEach(drawLens);
-
-    measureFixed(); measure(); drawSky(); drawLenses();
+    measureFixed(); measure(); drawSky();
     // nothing in the sky moves now (no smoke): it's drawn once and only again on resize. lenses redraw on scroll
     let dirty = false;
-    const flush = () => { if (dirty) { dirty = false; drawSky(); drawLenses(); } };
+    const flush = () => { if (dirty) { dirty = false; drawSky(); } };
     const later = () => { if (!dirty) { dirty = true; requestAnimationFrame(flush); } };
-    addEventListener("scroll", drawLenses, { passive: true });
+    addEventListener("scroll", drawSky, { passive: true });
     addEventListener("resize", () => { measureFixed(); measure(); later(); });
     if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); later(); }).observe(document.body);
-    if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) P.on = e.isIntersecting; }), { rootMargin: "80px" }); panels.forEach(P => io.observe(P.el)); }
     if (document.fonts) document.fonts.ready.then(() => { measure(); later(); });
     window.glSkyDirty = later;
   })();
