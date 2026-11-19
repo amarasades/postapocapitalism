@@ -33,7 +33,9 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 | Crack lines radiating from the chip | "Looks cheap." Only the chip itself plus refraction. |
 | Pill / slider toggle for the years | The year should just **shift digits** (scramble, then land). |
 | "Rounded down to be polite" | Removed. |
-| "Since ____" on the grid | Just "Collapsed" + year, with the chip covering the year's end. |
+| "Since ____" on the grid | Just "Collapsed" + year. (The chip no longer covers the year: the new layout put the year mid-panel.) |
+| AQI as a segmented bar, with two segments "breaking out" past the scale | "Not chic, not professional." AQI is a number + word, with an icon. |
+| Chip as a smooth curve with a continuous lit outline, shell-ripple arcs | Read as a cartoon. The chip is jagged, small flake facets, each lit on its own. No crack lines running off it. |
 | "Software that…" / "For Music, Fashion, Film, and whatever's next." | Current line: **"Solutions that waste less, last longer, and keep culture alive."** on **one row** on desktop. |
 | Film grain **on top of** the page | It dimmed every colour about 4% and killed the "futures." glow (and looked grainy when zoomed). The grain (`body::after`) must stay at **`z-index: -1`, behind the content**, as in the first orange version. |
 | Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." starts from `#fff3e0` with a 40px glow; the glow is now **adaptive** (see §4). |
@@ -72,17 +74,20 @@ Top to bottom:
 - **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 5**, accelerating: ΔT(t) = rate·t·(1 + t/60). Clamped to 2034 to 2131. **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
 - The temperature, condition, air, biosphere and grid figures are derived from that, plus a hash of the city.
 - **Two views:** `future` (inherited) and `now` (2026, real weather and AQI). Hover (desktop), tap (touch) or keyboard focus switches between them with a **glitch**, and the signal **slips** to 2026 by itself every 9 to 16 seconds.
-- **Stat rows:**
-  - **Air:** 10 segments, plus 2 that break out past the scale at 500 ("Lethal").
-  - **Biosphere:** three activity-style rings (flora, fauna, ocean).
-  - **Grid:** a 24-hour power strip (flatline in 2133).
-- **Damage (2133 only):** wear scratches on a canvas, drawn as **filled tapered slivers** (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin, plus **a chip cut out of the bottom-right corner** with `clip-path: path()`. It's positioned from the measured position of the grid's year text so it eats the end of the year. It's re-cut on resize and when fonts load.
+- **Bottom half:** two compact rows on the left, separated by dotted lines, and a big biosphere ring set on the right filling their height.
+  - **AQI:** icon (clear wind now / wind choked with particles in 2133) + number + word ("Lethal" at 500). No bar.
+  - **Grid:** icon (standing power pylon with lit insulators now / pylon snapped at the waist, wires cut, in 2133) + "Online 24/7" / "Collapsed ____".
+  - **Biosphere:** three big activity-style rings (flora, fauna, ocean), value + "Biosphere" + "Left"/"For now" in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead.
+- **Damage (2133 only):**
+  - **Scratches:** filled tapered slivers (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin. Light wear across the face, much denser short wear along the edges.
+  - **They catch the light:** geometry is built once (`damage()`), then `paint()` relights it every frame. The light source is the page's own sun: scrolling slides the panel past it, the mouse shifts the viewing angle on desktop, device tilt does on Android. A scratch lights up when it lies across the line to the light (anisotropic glint, `across^14`). iOS tilt needs a permission prompt, so it isn't used.
+  - **Chip:** bottom-right corner, cut with `clip-path: path()`, a jagged run of ~15 uneven flake facets with shallow scoops. Each facet's lip glints or darkens on its own depending on whether it faces the light; some have a faint flake scar. The outline feeds the liquid-glass map so the broken edge refracts. Re-cut on resize and when fonts load.
 - **Code flow:**
   - `resolve()` fetches the data.
   - `build()` computes both views.
   - `render()` paints the panel.
   - `setMode()` does the glitch.
-  - `damage()` draws the canvas and builds the clip.
+  - `damage()` builds the scratch and chip geometry and the clip; `paint()` lights them.
   - `applyClip()` switches the clip and the glass filter.
 
 ### Liquid glass (`LG` module)
@@ -118,7 +123,7 @@ Failure mode: everything stays redacted ("Signal lost", ████, ··).
 5. **Performance:** ~8 refracting glass panels, including the sticky nav. Unmeasured on real phones.
 6. **The "Scroll" hint collides with the planet labels** in the bottom-right on desktop since the solar system moved there.
 7. Very cool, slow-warming places (e.g. Ushuaia) still reach the 2131 clamp. Rare.
-8. Biosphere rings at 1 to 5% read as dots; their tracks need more contrast.
+8. Scratch relighting repaints ~600 small shapes per frame while scrolling. Fine on desktop; unmeasured on old phones.
 9. The "pa" stamp needs a real hand-drawn SVG.
 10. **The products are placeholders:** invented feature lists, all "In development", no contact address. More products are coming. Each must answer *"what part of the dead future does this cancel?"*
 11. The font is up for review.
