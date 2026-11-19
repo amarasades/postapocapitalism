@@ -624,8 +624,12 @@
     const h = hash(S.loc ? S.loc.label : "unknown");
     const rate = Math.max(S.rate ?? .045, .02) * RUNAWAY;
     const peak = S.peak ?? (S.curTemp != null ? S.curTemp + 14 : 30);
-    // the year this place stops being livable. by the time we left (2133), everywhere had.
-    const year = S.loc ? clamp(NOW_YEAR + Math.ceil((THRESHOLD - peak) / rate), NOW_YEAR + 8, ORIGIN) : null;
+    // the year this place stops being livable. warming isn't linear in the inherited timeline: feedbacks make the rate
+    // grow by its own size every 60 years, i.e. ΔT(t) = rate·t·(1 + t/60). solve ΔT(t) = THRESHOLD − peak for t.
+    // gives hot cities the 2030s–40s and cool ones the 2060s–2110s. never the origin year: that's the AI's, not the place's.
+    const gap = THRESHOLD - peak, acc = rate / 60;
+    const yrs = gap <= 0 ? 0 : (-rate + Math.sqrt(rate * rate + 4 * acc * gap)) / (2 * acc);
+    const year = S.loc ? clamp(NOW_YEAR + Math.ceil(yrs), NOW_YEAR + 8, ORIGIN - 2) : null;
     const fTemp = S.curTemp != null && year ? Math.round(S.curTemp + Math.max(rate * (year - NOW_YEAR), 12)) : null;
     const fAqi = clamp(Math.round(430 + (S.curAqi ?? 30 + h % 50) * 2.2), 430, 500);
     const fCond = [["haze", "Ash haze"], ["smoke", "Wildfire smoke"], ["haze", "Heat dome"], ["smoke", "Dust and smoke"]][h % 4];
@@ -825,14 +829,52 @@
     const rr = (a, b) => a + r() * (b - a);
     const LIGHT = a => `rgba(255,253,248,${a})`, DARK = a => `rgba(58,22,6,${a})`;
 
-    /* 1. wear: swirl marks and hairlines, light enough to only show at an angle */
-    [[w * .8, h * .15], [w * .1, h * .95]].forEach(([cx, cy]) => {
-      for (let i = 0; i < 110; i++) {
-        const rad = rr(20, Math.max(w, h) * 1.1), a0 = rr(0, 7), len = rr(.04, .18), al = rr(.06, .22);
-        c.beginPath(); c.arc(cx, cy, rad + .6, a0, a0 + len); c.strokeStyle = DARK((al * .45).toFixed(3)); c.lineWidth = .5; c.stroke();
-        c.beginPath(); c.arc(cx, cy, rad, a0, a0 + len); c.strokeStyle = LIGHT(al.toFixed(3)); c.lineWidth = rr(.35, .7); c.stroke();
+    /* 1. wear. no stroked lines: each scratch is a filled sliver that tapers to nothing at both ends, wanders slightly,
+          thickens and thins along its length, and skips where the grit lifted off the glass.
+          a faint dark twin underneath is the groove's shadow side. */
+    const scratch = (x, y, ang, len, bend, wmax, al) => {
+      const n = Math.max(10, Math.round(len / 2.5)), pts = [];
+      let hd = ang, px = x, py = y, wob = rr(0, 6);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        const prof = Math.pow(Math.sin(Math.PI * Math.min(1, t * rr(.98, 1.02))), .55) * (t < .5 ? 1 : .7 + .3 * (1 - t) * 2); // one end sharper than the other
+        pts.push([px, py, hd, wmax * prof * (.75 + .25 * Math.sin(t * 9 + wob) * Math.sin(t * 23 + wob * 2))]);
+        hd += bend / n + rr(-.012, .012); px += Math.cos(hd) * len / n; py += Math.sin(hd) * len / n;
       }
-    });
+      // break it into runs: grit skips
+      const runs = []; let cur = [], on = true;
+      pts.forEach((p, i) => {
+        if (!on) { if (r() < .45) { on = true; cur = [p]; } return; }
+        cur.push(p); if (i > 2 && i < n - 2 && r() < .035) { runs.push(cur); on = false; }
+      });
+      if (on) runs.push(cur);
+      const sliver = (run, dx, dy, style, wm) => {
+        if (run.length < 3) return;
+        // every piece tapers out on its own, so breaks don't leave blunt, cut-off ends
+        const m = run.length - 1, tp = Math.min(6, m / 2);
+        run = run.map(([x0, y0, a, wd], i) => [x0, y0, a, wd * Math.min(1, i / tp, (m - i) / tp)]);
+        c.beginPath();
+        run.forEach(([x0, y0, a, wd], i) => { const o = wd * wm / 2; const X = x0 + Math.cos(a + 1.5708) * o + dx, Y = y0 + Math.sin(a + 1.5708) * o + dy; i ? c.lineTo(X, Y) : c.moveTo(X, Y); });
+        for (let i = run.length - 1; i >= 0; i--) { const [x0, y0, a, wd] = run[i], o = wd * wm / 2; c.lineTo(x0 - Math.cos(a + 1.5708) * o + dx, y0 - Math.sin(a + 1.5708) * o + dy); }
+        c.closePath(); c.fillStyle = style; c.fill();
+      };
+      runs.forEach(run => { sliver(run, .45, .55, DARK((al * .4).toFixed(3)), 1.1); sliver(run, 0, 0, LIGHT(al.toFixed(3)), 1); });
+    };
+    // most wear goes the way the glass was wiped: two loose directions, a few strays
+    const dirs = [rr(-.5, -.2), rr(.35, .7)];
+    for (let i = 0; i < 55; i++) {                       // hairlines: barely there, only catch the light
+      const d = r() < .85 ? dirs[i % 2] + rr(-.18, .18) : rr(0, 6.28);
+      scratch(rr(-20, w), rr(-10, h), d, rr(14, 100), rr(-.25, .25), rr(.3, .6), rr(.1, .28));
+    }
+    for (let k = 0; k < 4; k++) {                        // clusters of tiny nicks, where something gritty sat and got pressed
+      const cx = rr(0, w), cy = rr(0, h), d = rr(0, 6.28);
+      for (let i = 0; i < 14; i++) scratch(cx + rr(-30, 30), cy + rr(-20, 20), d + rr(-.6, .6), rr(3, 14), rr(-.3, .3), rr(.3, .6), rr(.14, .3));
+    }
+    for (let i = 0; i < 4; i++)                          // a few real ones
+      scratch(rr(0, w * .8), rr(0, h), dirs[i % 2] + rr(-.1, .1), rr(70, 220), rr(-.3, .3), rr(.6, .95), rr(.3, .42));
+    for (let i = 0; i < 3; i++) {                        // one curved sleek where something dragged across it
+      const a = rr(0, 6.28); scratch(rr(w * .1, w * .7), rr(h * .2, h * .8), a, rr(120, 260), rr(.8, 1.4) * (r() < .5 ? -1 : 1), rr(.4, .6), rr(.14, .22));
+    }
 
     /* 2. a chip knocked out of the bottom-right corner, taking the end of the grid's year with it.
           the glass itself does the work: the edge refracts (see liquid glass below); we only add the light on its lip */

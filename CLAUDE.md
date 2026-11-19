@@ -69,14 +69,14 @@ Top to bottom:
 7. **Footer:** status bar and credits (GeoJS and Open-Meteo attribution is required).
 
 ### The forecast panel (`#tele`): the centrepiece
-- **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 5**, capped at 2133.
+- **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 5**, accelerating: ΔT(t) = rate·t·(1 + t/60). Clamped to 2034 to 2131. **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
 - The temperature, condition, air, biosphere and grid figures are derived from that, plus a hash of the city.
 - **Two views:** `future` (inherited) and `now` (2026, real weather and AQI). Hover (desktop), tap (touch) or keyboard focus switches between them with a **glitch**, and the signal **slips** to 2026 by itself every 9 to 16 seconds.
 - **Stat rows:**
   - **Air:** 10 segments, plus 2 that break out past the scale at 500 ("Lethal").
   - **Biosphere:** three activity-style rings (flora, fauna, ocean).
   - **Grid:** a 24-hour power strip (flatline in 2133).
-- **Damage (2133 only):** light wear scratches on a canvas, plus **a chip cut out of the bottom-right corner** with `clip-path: path()`. It's positioned from the measured position of the grid's year text so it eats the end of the year. It's re-cut on resize and when fonts load.
+- **Damage (2133 only):** wear scratches on a canvas, drawn as **filled tapered slivers** (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin, plus **a chip cut out of the bottom-right corner** with `clip-path: path()`. It's positioned from the measured position of the grid's year text so it eats the end of the year. It's re-cut on resize and when fonts load.
 - **Code flow:**
   - `resolve()` fetches the data.
   - `build()` computes both views.
@@ -117,7 +117,7 @@ Failure mode: everything stays redacted ("Signal lost", ████, ··).
 4. **Liquid glass doesn't render on Safari / iOS.** That includes **Chrome on iPhone**: every iOS browser is WebKit, not Chromium. The only full fix is WebGL.
 5. **Performance:** ~8 refracting glass panels, including the sticky nav. Unmeasured on real phones.
 6. **The "Scroll" hint collides with the planet labels** in the bottom-right on desktop since the solar system moved there.
-7. Cool cities often clamp to 2133 (the same as the origin). Consider a 45°C threshold if most visitors see 2133.
+7. Very cool, slow-warming places (e.g. Ushuaia) still reach the 2131 clamp. Rare.
 8. Biosphere rings at 1 to 5% read as dots; their tracks need more contrast.
 9. The "pa" stamp needs a real hand-drawn SVG.
 10. **The products are placeholders:** invented feature lists, all "In development", no contact address. More products are coming. Each must answer *"what part of the dead future does this cancel?"*
