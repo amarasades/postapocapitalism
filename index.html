@@ -917,7 +917,7 @@
         vec2 g = max(abs(lp - h) - (h - max(uR, uB + 1.)), 0.) * sign(lp - h), n = length(g) > 0. ? normalize(g) : vec2(0.);
         float t = 1. - clamp(d / uB, 0., 1.), m = t * t * (3. - 2. * t) * t;
         vec2 p = uOrigin + lp, off = -n * m * uScale;
-        vec3 col = vec3(bg(p + off * 1.18).r, bg(p + off).g, bg(p + off * .82).b), straight = bg(p);
+        vec3 col = vec3(bg(p + off * 1.32).r, bg(p + off).g, bg(p + off * .68).b), straight = bg(p);
         vec3 dc = abs(col - straight);
         float vis = smoothstep(.012, .08, max(dc.r, max(dc.g, dc.b)));   // only where the bend actually changes something (the sun's edge):
                                                                         // over plain sky a lens changes nothing, and our redraw would only show as a frame
