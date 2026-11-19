@@ -899,8 +899,15 @@
   if (!seen) new IntersectionObserver((es, io) => es.forEach(e => { if (e.isIntersecting) { io.disconnect(); seen = true; startCycle(); } }), { threshold: .5 }).observe(tele);
   const fine = matchMedia("(hover: hover)").matches;
   if (fine) {
-    tele.addEventListener("pointerenter", () => { hovering = true; clearTimeout(cycle); flip(); });
-    tele.addEventListener("pointerleave", () => { hovering = false; flip(); schedule(); });
+    // hover is judged against the panel's full rectangle, not its clipped shape: the chip cut out of the inherited panel
+    // made the pointer "leave" over the crack, flip to 2026 (no crack), "enter" again, flip back… rapidly
+    addEventListener("pointermove", e => {
+      if (e.pointerType !== "mouse") return;
+      const r = tele.getBoundingClientRect(), inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (inside && !hovering) { hovering = true; clearTimeout(cycle); flip(); }
+      else if (!inside && hovering) { hovering = false; flip(); schedule(); }
+    }, { passive: true });
+    document.documentElement.addEventListener("pointerleave", () => { if (hovering) { hovering = false; flip(); schedule(); } });
   } else {
     tele.addEventListener("click", () => { flip(); schedule(); });
   }
@@ -986,7 +993,7 @@
       const f = mk("filter", { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" }, defs);
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map" }, f);
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * 1.4, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .6, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * 1.28, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .72, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
@@ -1004,7 +1011,7 @@
       const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
       // build the new filters first, swap, then drop the old ones, so the glass never flashes
       const id = "lg" + n++, old = el._lgIds || [];
-      const scale = Math.min(110, Math.max(40, Math.min(w, h) * .6));
+      const scale = Math.min(64, Math.max(30, Math.min(w, h) * .45));   // (110 smeared the sun into a giant disc and the chip into streaks)
       el._lgBase = filter(id, w, h, lens(w, h, r, null), scale);
       el._lgChip = chip ? filter(id + "c", w, h, lens(w, h, r, chip), scale) : null;
       el._lgIds = chip ? [id, id + "c"] : [id];
@@ -1199,7 +1206,7 @@
       P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
       if (P.c.width !== Math.round(P.w * P.k) || P.c.height !== Math.round(P.h * P.k)) { P.c.width = Math.round(P.w * P.k); P.c.height = Math.round(P.h * P.k); }
       g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height); g.uniform1f(U.uSee, P.moves ? 1 : 0); g.uniform1f(U.uK, P.k);
-      if (P.moves && navTxt.ready) { if (!navTxt.covers(b)) navTxt.snap(b); g.uniform4f(U.uTxtR, 0, navTxt.top - scrollY, navTxt.w, navTxt.h); g.uniform1f(U.uTxtA, 1); }
+      if (P.moves && navTxt.ready) { if (b.bottom > 0 && !navTxt.covers(b) && performance.now() - (navTxt.at || 0) > 250) navTxt.snap(b); g.uniform4f(U.uTxtR, 0, navTxt.top - scrollY, navTxt.w, navTxt.h); g.uniform1f(U.uTxtA, 1); }
       else g.uniform1f(U.uTxtA, 0);
       const ob = orbEl.getBoundingClientRect(); g.uniform4f(U.uOrbR, ob.left, ob.top, ob.width, ob.height); g.uniform1f(U.uOrbA, orbReady && P.hasOrb ? orbAlpha : 0); setScene(g, U);
       g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
@@ -1242,13 +1249,14 @@
        (no work); it's redrawn only when the nav reappears, when scrolling stops, or when the band runs out */
     const navP = panels.find(P => P.moves);
     const navTxt = { ready: false, top: 0, w: 0, h: 0, cv: document.createElement("canvas"),
-      covers(b) { const t = b.top + scrollY; return this.ready && t - 40 > this.top && t + b.height + 40 < this.top + this.h; },
+      // (the band is clamped at the page top, so "above" counts as covered there; otherwise this re-snapped forever)
+      covers(b) { const t = b.top + scrollY; return this.ready && (t - 40 > this.top || this.top === 0) && t + b.height + 40 < this.top + this.h; },
       busy: false, pending: false,
       snap(b) {
         // everything under the nav, in page order: backgrounds (colours, gradients, textures), svg graphics, canvases and
         // text, drawn into a band ±260px around it. svg graphics decode asynchronously; the old texture stays up until the
         // new one is complete, so nothing blocks scrolling
-        if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true;
+        if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true; this.at = performance.now();
         const k = navP.k, M = 260, top = Math.max(0, b.top + scrollY - M), h = Math.round(b.height + 2 * M), w = Math.round(innerWidth);
         const vTop = top - scrollY, vBot = vTop + h, sy0 = scrollY;
         const ops = [], waits = [];
@@ -1308,7 +1316,11 @@
           const cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden") return;
           const op = visible(r) ? opacityOf(el) : 1; if (op < .02) return;
           if (visible(r) && !el.matches("body, html")) bgOps(el.matches(".glass.bgoff") ? el : el, r, cs, op);
-          if (el.tagName.toLowerCase() === "svg") { if (visible(r)) svgOps(el, r, op); return; }
+          if (el.tagName.toLowerCase() === "svg") {
+            if (!visible(r)) return;
+            // the solar system has hundreds of parts: reuse its once-a-second snapshot instead of re-serialising it
+            if (el === orbSvg && orbReady) { const R0 = orbEl.getBoundingClientRect(); ops.push(x => { x.globalAlpha = orbAlpha; x.drawImage(orbCv, R0.left, R0.top - vTop, R0.width, R0.height); }); return; }
+            svgOps(el, r, op); return; }
           if (el.tagName === "CANVAS") { if (visible(r)) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
           for (const ch of el.childNodes) { if (ch.nodeType === 3) { if (ch.nodeValue.trim()) textOps(ch, el, cs, op); } else if (ch.nodeType === 1) walk(ch); }
         };
@@ -1320,22 +1332,22 @@
           x.globalAlpha = 1;
           const g = navP.g; g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, navP.txt); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, cv2); g.activeTexture(g.TEXTURE0);
           this.cv = cv2; this.top = top; this.w = w; this.h = h; this.ready = true; this.busy = false;
+          if (this.pending) { this.pending = false; setTimeout(() => this.snap(navP.el.getBoundingClientRect()), 120); }
           drawLens(navP);
-          if (this.pending) { this.pending = false; this.snap(navP.el.getBoundingClientRect()); }
         });
       } };
     if (navP) {
       const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
       new MutationObserver(re).observe(document.querySelector(".nav"), { attributes: true, attributeFilter: ["class"] });
       if (document.fonts) document.fonts.ready.then(re); else re();
-      setInterval(() => { if (!(window.__vsMoving && window.__vsMoving())) re(); }, 1500);   // keeps up with the forecast's own changes when still
+      setInterval(() => { if (!(window.__vsMoving && window.__vsMoving())) re(); }, 4000);   // keeps up with the forecast's own changes when still
     }
     const drawLenses = () => { syncSize(); panels.forEach(drawLens);
       clearTimeout(settle); settle = setTimeout(() => { syncSize(); panels.forEach(drawLens); }, 140); };   // one clean redraw after the scroll stops
     if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) { P.on = e.isIntersecting; P.c.style.display = P.on ? "" : "none"; if (P.on) drawLens(P); } }), { rootMargin: "40px" }); panels.forEach(P => io.observe(P.el)); }
     else panels.forEach(P => P.on = true);
 
-    measureFixed(); measure(); drawSky(); drawLenses(); snapOrbit(); setInterval(snapOrbit, 1000);
+    measureFixed(); measure(); drawSky(); drawLenses(); snapOrbit(); setInterval(snapOrbit, 5000);
     // the sky is static (drawn once, and on resize); the lenses redraw straight from the scroll event
     let dirty = false;
     const flush = () => { if (dirty) { dirty = false; drawSky(); drawLenses(); } };
