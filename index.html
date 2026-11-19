@@ -1092,9 +1092,12 @@
         vec2 q = abs(lp - h) - (h - R);
         float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - R);
         vec2 g = max(abs(lp - h) - (h - max(R, Bv + 1.)), 0.) * sign(lp - h);
-        if (dd < -2. || dd > Bv || length(g) == 0. || (uChip.z > 0. && lp.x > uChip.x && lp.y > uChip.y)) { gl_FragColor = vec4(0.); return; }
+        // the WHOLE panel is drawn here (bent in the bevel, straight in the middle): no inner seam with the sky canvas
+        // (two separately drawn layers meeting inside the panel showed as a notch in the sun on Safari), and no chip box
+        // (the panel's clip-path already cuts the crack out)
+        if (dd < -2. || (uSee > 0. && dd > Bv)) { gl_FragColor = vec4(0.); return; }
         float t = 1. - clamp(dd / Bv, 0., 1.), m = t*t*(3. - 2.*t)*t;
-        vec2 off = -normalize(g) * m * uGeo.z;
+        vec2 off = length(g) > 0. && dd < Bv ? -normalize(g) * m * uGeo.z : vec2(0.);
         // full-spectrum dispersion: seven wavelengths, each bent a little less than the last (red most, violet least),
         // weighted by its colour; then the split is pushed apart for a saturated rainbow
         vec3 sum = vec3(0.), wsum = vec3(0.), avg = vec3(0.);
@@ -1116,7 +1119,7 @@
         // at the inner end, so it meets the real thing with no seam
         // full strength through the whole bevel: the bend reaches exactly zero at its inner end, and only THEN hands over
         // to the real sky (fading earlier left a few px of bend showing as a notch in the sun on big panels)
-        float a = 1. - smoothstep(Bv - 1.5, Bv, dd);
+        float a = 1.;
         // the nav floats over page text we can't redraw: there the edge stays see-through except where the bend visibly
         // changes the sky (the sun's rim), so the text under it never disappears behind a band
         if (uSee > 0.) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.015, .09, max(dc.r, max(dc.g, dc.b))); }
