@@ -917,9 +917,12 @@
         vec2 g = max(abs(lp - h) - (h - max(uR, uB + 1.)), 0.) * sign(lp - h), n = length(g) > 0. ? normalize(g) : vec2(0.);
         float t = 1. - clamp(d / uB, 0., 1.), m = t * t * (3. - 2. * t) * t;
         vec2 p = uOrigin + lp, off = -n * m * uScale;
-        vec3 col = vec3(bg(p + off * 1.25).r, bg(p + off).g, bg(p + off * .75).b);
+        vec3 col = vec3(bg(p + off * 1.18).r, bg(p + off).g, bg(p + off * .82).b), straight = bg(p);
+        vec3 dc = abs(col - straight);
+        float vis = smoothstep(.012, .08, max(dc.r, max(dc.g, dc.b)));   // only where the bend actually changes something (the sun's edge):
+                                                                        // over plain sky a lens changes nothing, and our redraw would only show as a frame
         col = mix(col, vec3(1., .96, .91), uFill);   // the panel's own light fill, so the bevel matches the clear middle
-        float a = (1. - smoothstep(uB * .18, uB * .62, d)) * clamp(d + .5, 0., 1.);   // the bend lives at the rim; it hands over to the real backdrop early
+        float a = (1. - smoothstep(uB * .3, uB * .85, d)) * clamp(d + .5, 0., 1.) * vis;   // the bend lives at the rim; it hands over to the real backdrop early
         gl_FragColor = vec4(col * a, a);
       }`;
     // one small WebGL canvas per panel, drawn in place (no copying between canvases: that readback was the lag on iPhone),
@@ -927,7 +930,7 @@
     const sunEl = document.querySelector(".sun"), skyEl = document.querySelector(".sky"), K = 1;
     const make = el => {
       const c = document.createElement("canvas"); c.className = "lens"; c.setAttribute("aria-hidden", "true");
-      const gl = c.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true, preserveDrawingBuffer: false });
+      const gl = c.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true, preserveDrawingBuffer: false, depth: false, stencil: false, powerPreference: "high-performance" });
       if (!gl) return null;
       const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
       const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
@@ -937,11 +940,11 @@
       const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
       const U = {}; ["uSize", "uOrigin", "uVp", "uSkyTop", "uSun", "uR", "uB", "uScale", "uDpr", "uFbH", "uFill"].forEach(k => U[k] = gl.getUniformLocation(pr, k));
       el.prepend(c);
-      return { el, c, gl, U, w: 0, h: 0, rad: 0, visible: true };
+      return { el, c, gl, U, w: 0, h: 0, rad: 0, visible: true, x: 0, y: 0, moves: !!el.closest(".nav") };
     };
     const panels = [...document.querySelectorAll(".glass")].map(make).filter(Boolean);
     if (!panels.length) return;
-    const measure = P => { P.w = P.el.offsetWidth; P.h = P.el.offsetHeight; P.rad = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
+    const measure = P => { const r = P.el.getBoundingClientRect(); P.x = r.left; P.y = r.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight; P.rad = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
       const W = Math.round(P.w * K), H = Math.round(P.h * K); if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; } };
     panels.forEach(measure);
     let sun = null, sky = null;
@@ -950,7 +953,8 @@
     function draw() {
       for (const P of panels) {
         if (!P.visible || !P.w || !P.h) continue;
-        const r = P.el.getBoundingClientRect(), { gl, U } = P, mn = Math.min(P.w, P.h);
+        // position from the scroll offset (no layout reads while scrolling); only the sticky, tucking nav is measured live
+        const r = P.moves ? P.el.getBoundingClientRect() : { left: P.x, top: P.y - scrollY }, { gl, U } = P, mn = Math.min(P.w, P.h);
         gl.viewport(0, 0, P.c.width, P.c.height);
         gl.uniform2f(U.uSize, P.w, P.h); gl.uniform2f(U.uOrigin, r.left, r.top); gl.uniform2f(U.uVp, sky[1], sky[2]); gl.uniform2f(U.uSkyTop, sky[0], 0);
         gl.uniform3f(U.uSun, sun[0], sun[1], sun[2]);
@@ -961,11 +965,13 @@
       }
     }
     let queued = false; const queue = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; draw(); }); } };
-    addEventListener("scroll", queue, { passive: true });
-    addEventListener("resize", () => { measureFixed(); queue(); });
-    if ("ResizeObserver" in window) { const ro = new ResizeObserver(es => { es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) measure(P); }); queue(); }); panels.forEach(P => ro.observe(P.el)); }
+    let drewAt = -1;   // draw right in the scroll event (one frame sooner than waiting for the next frame), at most once per frame
+    addEventListener("scroll", () => { const f = Math.round(performance.now() / 8); if (f !== drewAt) { drewAt = f; draw(); } else queue(); }, { passive: true });
+    addEventListener("resize", () => { measureFixed(); panels.forEach(measure); queue(); });
+    if ("ResizeObserver" in window) { const ro = new ResizeObserver(() => { panels.forEach(measure); queue(); }); panels.forEach(P => ro.observe(P.el)); }   // any panel resizing can move the ones below it
     if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => { es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) P.visible = e.isIntersecting; }); queue(); }, { rootMargin: "60px" }); panels.forEach(P => io.observe(P.el)); }
     if (document.fonts) document.fonts.ready.then(() => { panels.forEach(measure); queue(); });
+    if ("ResizeObserver" in window) new ResizeObserver(() => { panels.forEach(measure); queue(); }).observe(document.body);   // page height changes move panels too
     draw();
   })();
 
