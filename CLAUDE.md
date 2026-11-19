@@ -33,7 +33,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 | Crack lines radiating from the chip | "Looks cheap." Only the chip itself plus refraction. |
 | Pill / slider toggle for the years | The year should just **shift digits** (scramble, then land). |
 | "Rounded down to be polite" | Removed. |
-| "Since ____" on the grid | Just "Collapsed" + year. (The chip no longer covers the year: the new layout put the year mid-panel.) |
+| "Since ____" on the grid | Just "Collapsed" + year, and **the chip eats the year** (and nibbles the "d"), so in practice it reads "Collapse…". |
 | AQI as a segmented bar, with two segments "breaking out" past the scale | "Not chic, not professional." AQI is a number + word, with an icon. |
 | Chip as a smooth curve with a continuous lit outline, shell-ripple arcs | Read as a cartoon. The chip is jagged, small flake facets, each lit on its own. No crack lines running off it. |
 | "Software that…" / "For Music, Fashion, Film, and whatever's next." | Current line: **"Solutions that waste less, last longer, and keep culture alive."** on **one row** on desktop. |
@@ -74,14 +74,15 @@ Top to bottom:
 - **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **46°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 6**, accelerating: ΔT(t) = rate·t·(1 + t/25). Clamped to 2030 to 2131. (The owner asked for years ~20+ earlier. This is lore, not a projection: real studies put lethal humid heat in the Gulf / South Asia around 2070 to 2100 under high emissions, and temperate cities essentially never this century.) **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
 - The temperature, condition, air, biosphere and grid figures are derived from that, plus a hash of the city.
 - **Two views:** `now` (2026, real weather and AQI) and `future` (inherited). **Sequence:** the panel opens on 2026; 2.5 s after it's first on screen (IntersectionObserver, 50%) it glitches to the inherited one, then swaps every 7 s. Tap / click / Enter / Space flips to the other view and resets the 7 s wait. Desktop hover shows the other view and holds it while hovered, flips back on leave. Reduced motion: one slip, then it stays. `aria-live` is off (it would announce every 7 s).
-- **Bottom half:** two compact rows on the left (AQI, Grid) separated by dotted lines, and a big biosphere ring set on the **right** (150px desktop, 112px phone) with a "Biosphere" HUD label above its top-left. Tighter sizes on phones.
+- **Top half:** icon + big temperature on the **left**; city, "Unlivable by ____", condition and feels-like **right-aligned** on the right.
+- **Bottom half:** a big biosphere ring set on the **left** (168px desktop, 124px phone) with a "Biosphere" HUD label above its top-left, and two compact rows on the right (AQI, Grid) separated by dotted lines. The rows don't need to match the ring's height.
   - **AQI:** icon (clear wind now / wind choked with particles in 2133) + number + word ("Lethal" at 500). No bar.
   - **Grid:** icon (standing power pylon with lit insulators now / pylon snapped at the waist, wires cut, in 2133) + "Online 24/7" / "Collapsed ____".
   - **Biosphere:** three big activity-style rings (flora, fauna, ocean), **only the percentage** in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead. In 2026 they're **not full**: 86 / 71 / 78, "78%".
 - **Damage (2133 only):**
   - **Scratches:** filled tapered slivers (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin. Light wear across the face, much denser short wear along the edges.
   - **They catch the light:** geometry is built once (`damage()`), then `paint()` relights it every frame. The light source is the page's own sun: scrolling slides the panel past it, the mouse shifts the viewing angle on desktop, device tilt does on Android. A scratch lights up when it lies across the line to the light (anisotropic glint, `across^14`). iOS tilt needs a permission prompt, so it isn't used.
-  - **Chip:** bottom-right corner, cut with `clip-path: path()`, a jagged run of ~15 uneven flake facets with shallow scoops. Each facet's lip glints or darkens on its own depending on whether it faces the light; some have a faint flake scar. The outline feeds the liquid-glass map so the broken edge refracts. Re-cut on resize and when fonts load.
+  - **Chip:** bottom-right corner, cut with `clip-path: path()`. **Sized from the grid year's measured position** (right edge from the element, width from `measureText` of the inherited year, since it may be measured while 2026 shows "24/7"): it starts on the right edge above the year, its curve passes just past the year's top-left, and it's about as wide along the bottom as it is tall. Edge = a jagged run of uneven flake facets (count scales with length, ~9px each) with shallow scoops. Each facet's lip glints or darkens on its own depending on whether it faces the light; some have a faint flake scar. The outline feeds the liquid-glass map so the broken edge refracts. Re-cut on resize and when fonts load.
 - **Code flow:**
   - `resolve()` fetches the data.
   - `build()` computes both views.
