@@ -87,6 +87,8 @@
   .hero { position: relative; overflow-x: clip; min-height: calc(100svh - 70px); display: flex; flex-direction: column; justify-content: center; padding: 40px 0 32px; }
   .hero-meta { display: flex; gap: 26px; color: var(--ink-dim); margin-bottom: 26px; flex-wrap: wrap; }
   .hero-meta b { color: var(--ink); font-weight: 500; }
+  .hero-meta span { display: inline-flex; align-items: center; gap: .5em; }
+  .hero-meta .dot { margin: 0; vertical-align: 0; position: relative; top: -.05em; } /* centred on the capitals, not the line box */
   .hero > .wrap { width: 100%; max-width: 1250px; }
   .hero-grid { display: grid; grid-template-columns: 1fr minmax(340px, 430px); align-items: center; gap: 40px; }
   h1 { font-weight: 700; font-size: clamp(64px, 15vw, 210px); line-height: .84; letter-spacing: -.055em; }
@@ -231,6 +233,7 @@
     .log .row .msg { grid-column: 1 / -1; }
     .log .row .end { display: none; }
     .sun { right: -6vw; top: 12vh; }
+    .hero-meta { margin-bottom: 71px; } /* the info row lost its second line (UTC, Sun–Earth): keep "futures." where it was */
   }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
@@ -290,8 +293,6 @@
       <span><i class="dot"></i><b>Signal live</b></span>
       <span>Timeline <b>Inherited</b></span>
       <span>Origin <b>2133</b></span>
-      <span>UTC <b id="m-utc">··:··:··</b></span>
-      <span>Sun–Earth <b id="m-km">···</b></span>
     </div>
     <div class="hero-grid">
       <h1><span>We</span><span>create</span><span>futures.</span></h1>
@@ -535,7 +536,6 @@
   function orrery() {
     const now = Date.now(), d = new Date(now);
     const ghostMs = Date.UTC(2133, d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
-    let earthNow;
     parts.forEach(o => {
       const h = helio(o.p, now), g = helio(o.p, ghostMs), rd = o.p[7];
       const [x, y] = at(rd, h.lon), [gx, gy] = at(rd, g.lon);
@@ -550,15 +550,12 @@
         o.arc.setAttribute("d", `M ${x} ${y} A ${rd} ${rd} 0 0 ${dl > 0 ? 0 : 1} ${gx} ${gy}`);
       }
       if (o.earth) {
-        earthNow = h;
         o.ring.setAttribute("cx", x); o.ring.setAttribute("cy", y); o.moonOrbit.setAttribute("cx", x); o.moonOrbit.setAttribute("cy", y);
         // the moon: mean elongation is enough at this scale
         const days = now / 86400000 + 2440587.5 - 2451545, ml = (218.316 + 13.176396 * days) * RAD;
         o.moon.setAttribute("cx", x + Math.cos(ml) * 15); o.moon.setAttribute("cy", y - Math.sin(ml) * 15);
       }
     });
-    $("m-utc").textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-    $("m-km").textContent = Math.round(earthNow.dist * 149597870.7).toLocaleString("en-US").replace(/,/g, " ") + " km";
   }
   orrery(); setInterval(orrery, 1000);
   // the solar system rises from the bottom-right corner of the first screen: you only see part of it on load
@@ -568,10 +565,19 @@
     const cx = innerWidth * (mobile ? .92 : .86) - hr.left, cy = screenH - (hr.top + scrollY) - (mobile ? 30 : 60);
     o.style.width = W + "px"; o.style.left = (cx - W / 2) + "px"; o.style.top = (cy - W / 2) + "px";
   }
-  // reference height is taken once (the small viewport), so the address bar showing/hiding while scrolling can't move it
-  let screenH = document.documentElement.clientHeight, lastW = innerWidth;
+  // reference height = the small viewport (all browser bars showing), so the bars showing/hiding while scrolling can't move it.
+  // Chrome on iOS reports a too-tall clientHeight at load (Safari doesn't), which pushed the system too low there,
+  // so it's capped by a 100svh probe, and re-measured on height changes while still at the very top of the page.
+  const svhProbe = document.createElement("div");
+  svhProbe.style.cssText = "position:fixed;top:0;left:0;width:0;height:100vh;height:100svh;visibility:hidden;pointer-events:none";
+  document.body.appendChild(svhProbe);
+  const smallH = () => Math.min(document.documentElement.clientHeight, svhProbe.offsetHeight || Infinity);
+  let screenH = smallH(), lastW = innerWidth;
   placeOrrery();
-  addEventListener("resize", () => { if (innerWidth === lastW) return; lastW = innerWidth; screenH = document.documentElement.clientHeight; placeOrrery(); });
+  addEventListener("resize", () => {
+    if (innerWidth !== lastW) { lastW = innerWidth; screenH = smallH(); placeOrrery(); return; }
+    if (scrollY < 2) { const h = smallH(); if (Math.abs(h - screenH) > 1) { screenH = h; placeOrrery(); } }
+  });
   if (document.fonts) document.fonts.ready.then(placeOrrery);
 
   const wave = $("wave"); let t = 0;

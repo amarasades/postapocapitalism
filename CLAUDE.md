@@ -38,7 +38,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 | Film grain **on top of** the page | It dimmed every colour about 4% and killed the "futures." glow (and looked grainy when zoomed). The grain (`body::after`) must stay at **`z-index: -1`, behind the content**, as in the first orange version. |
 | Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." starts from `#fff3e0` with a 40px glow; the glow is now **adaptive** (see §4). |
 | "futures." over the pale part of the sky | The glow only reads over the orange. On phones it sits about 53 to 62% down the first screen (lower than the original 40 to 49%, which they asked for, but no lower). |
-| Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar). |
+| Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar) unless the page is still at the very top. That height is `min(clientHeight, 100svh probe)`: Chrome on iOS reported too tall a height at load and put the system too low; Safari's placement is the one the owner approved. |
 | Replacing the sun's `box-shadow` glow with a gradient | Tried, to remove a faint rectangle on phones. It made the sun blotchy and "dead". **The sun is restored exactly to the original** (see `archive/first-orange/README.md`). The faint phone rectangle was in the original too; leave it. |
 | Saturation boost in the glass | The glass used `saturate(1.35 to 1.6)`, which made everything behind it about 14% more orange ("way too orange"). **Glass adds no saturation**: only refraction, a light blur and brightness ×1.04. |
 
@@ -56,7 +56,7 @@ Top to bottom:
 1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and film grain (`body::after`).
 2. **`.nav`:** a sticky glass bar. It **tucks away when scrolling down and returns when scrolling up** (`.tucked`, small scroll script near the end).
 3. **Hero (`header.hero`):**
-   - **Info row:** ● Signal live · Timeline inherited · Origin 2133 · UTC (live) · Sun–Earth km (live).
+   - **Info row:** ● Signal live · Timeline inherited · Origin 2133. (UTC and Sun–Earth distance were removed at the owner's request. On phones the row has extra bottom margin so "futures." stays where it was.)
    - **`h1`:** "We / create / futures." (left-aligned; "futures." is light and glowing).
    - **Adaptive glow** (script near the end): reads the sky colour behind "futures." from its height on screen (the sky is a fixed gradient) and sets `text-shadow` + colour inline. Over the dark orange it's the original 40px glow about 5% brighter; over the pale haze a tight white core and a wide warm bloom come in. The owner asked for this; don't go back to a static shadow.
    - **`#tele`:** the forecast panel.
