@@ -77,13 +77,13 @@ Top to bottom:
 - **Top half:** icon + big temperature on the **left**; city, "Unlivable by ____", condition and feels-like **right-aligned** on the right.
 - **Bottom half:** a big biosphere ring set on the **left** (168px desktop, 124px phone) with a "Biosphere" HUD label above its top-left, and three compact rows on the right (AQI, Water, Grid). **Dotted lines only between rows, never on top.** The rows don't need to match the ring's height.
   - **AQI:** icon (clear wind now / wind choked with particles in 2133) + number + word ("Lethal" at 500). No bar.
-  - **Water:** icon (droplet now / dashed, cracked, half-empty droplet in 2133) + "Tap Drinkable" / "2 L Rationed".
+  - **Water:** icon (droplet now / dashed outline with a low waterline arc in 2133, no crack squiggle) + "Tap Drinkable" / "2 L Rationed".
   - **Grid:** icon (standing power pylon with lit insulators now / pylon snapped at the waist, wires cut, in 2133) + "Online 24/7" / "Collapsed ____".
   - **Biosphere:** three big activity-style rings (flora, fauna, ocean), **only the percentage** in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead. In 2026 they're **not full**: 86 / 71 / 78, "78%".
 - **Damage (2133 only):**
   - **Scratches:** filled tapered slivers (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin. Light wear across the face, much denser short wear along the edges.
   - **They catch the light:** geometry is built once (`damage()`), then `paint()` relights it every frame. The light source is the page's own sun: scrolling slides the panel past it, the mouse shifts the viewing angle on desktop, device tilt does on Android. A scratch lights up when it lies across the line to the light (anisotropic glint, `across^14`). iOS tilt needs a permission prompt, so it isn't used.
-  - **Chip:** bottom-right corner, cut with `clip-path: path()`. **Sized from the grid year's measured position** (right edge from the element, width from `measureText` of the inherited year, since it may be measured while 2026 shows "24/7"): it's the **original chip shape (84 × 52, rounded) scaled up evenly** (never stretched: the owner noticed) by the smallest factor that puts the whole year inside it; it may nibble "…ed". Because the shape keeps its proportions, the higher the grid row sits above the bottom edge, the wider the chip gets, so phones have tighter spacing below the rows. Edge = a jagged run of uneven flake facets (count scales with length, ~9px each) with shallow scoops. Each facet's lip glints or darkens on its own depending on whether it faces the light; some have a faint flake scar. The outline feeds the liquid-glass map so the broken edge refracts. Re-cut on resize and when fonts load.
+  - **Chip:** bottom-right corner, cut with `clip-path: path()`. **Sized from the grid year's measured position** (right edge from the element, width from `measureText` of the inherited year, since it may be measured while 2026 shows "24/7"): it's a **rounded corner bite, 72 × 52 with the curve's control at (.76, .86), scaled up evenly** (never stretched: the owner noticed twice; the plain 84 × 52 scaled up read as "stretched horizontally") by the smallest factor that puts the whole year inside it; it may nibble "…ed". Because the shape keeps its proportions, the higher the grid row sits above the bottom edge, the wider the chip gets, so phones have tighter spacing below the rows. Edge = a jagged run of uneven flake facets (count scales with length, ~9px each) with shallow scoops. Each facet's lip glints or darkens on its own depending on whether it faces the light; some have a faint flake scar. The outline feeds the liquid-glass map so the broken edge refracts. Re-cut on resize and when fonts load.
 - **Code flow:**
   - `resolve()` fetches the data.
   - `build()` computes both views.
@@ -94,7 +94,9 @@ Top to bottom:
 
 ### Liquid glass (`LG` module)
 - **Real refraction, in Chromium only** (`backdrop-filter: url(#svgFilter)` isn't supported in Safari or Firefox, which includes every iPhone browser). The `html.lg` class is set when it's active.
-- **How it works:** a per-element displacement map is generated on a `<canvas>` from the rounded-rect signed distance field (plus the chip outline for `#tele`). It feeds an `feDisplacementMap` with an **RGB split** (dispersion), a light blur and saturation.
+- **How it works:** a per-element displacement map is generated on a `<canvas>` from the rounded-rect signed distance field (plus the chip outline for `#tele`). It feeds an `feDisplacementMap` with an **RGB split** (chromatic aberration: R ×1.2, G ×.93, B ×.66 of the scale; the owner asked for more), a light blur, no saturation.
+- **Dispersion fringe (all browsers):** two coloured inset shadows on `.glass`, pink-red top-left and blue bottom-right, so the prism look also shows where refraction isn't supported (iPhone).
+- **Fills are light** (owner asked ~5% more see-through): `.glass` .11/.03/.05, `.tele` .25/.11/.15, `.tele.now` .45/.19/.09.
 - Filters are rebuilt on resize. New ones are created *before* the old ones are removed, to avoid a flash.
 - **Fallback:** clear glass with `blur(5px) saturate(160%)`.
 - **Specular rim:** `.glass::before` (masked gradient border).
