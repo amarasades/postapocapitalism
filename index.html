@@ -1243,55 +1243,86 @@
     const navP = panels.find(P => P.moves);
     const navTxt = { ready: false, top: 0, w: 0, h: 0, cv: document.createElement("canvas"),
       covers(b) { const t = b.top + scrollY; return this.ready && t - 40 > this.top && t + b.height + 40 < this.top + this.h; },
+      busy: false, pending: false,
       snap(b) {
-        if (!navP) return;
+        // everything under the nav, in page order: backgrounds (colours, gradients, textures), svg graphics, canvases and
+        // text, drawn into a band ±260px around it. svg graphics decode asynchronously; the old texture stays up until the
+        // new one is complete, so nothing blocks scrolling
+        if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true;
         const k = navP.k, M = 260, top = Math.max(0, b.top + scrollY - M), h = Math.round(b.height + 2 * M), w = Math.round(innerWidth);
-        const cv2 = this.cv; cv2.width = Math.round(w * k); cv2.height = Math.round(h * k);
-        const x = cv2.getContext("2d"); x.setTransform(k, 0, 0, k, 0, 0); x.clearRect(0, 0, w, h);
-        const vTop = top - scrollY, vBot = vTop + h;   // band in viewport coordinates, right now
-        // first the glass panels' own backgrounds (their copied fills on .lensbg, and .bar strips), so the nav's rim shows
-        // a panel as a panel and not bare sky (that left a lighter rectangle where the nav crossed the forecast)
-        const paintBg = el => {
-          const r = el.getBoundingClientRect(); if (r.bottom < vTop || r.top > vBot || !r.width) return;
-          const cs = getComputedStyle(el), rad = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, r.width / 2, r.height / 2);
+        const vTop = top - scrollY, vBot = vTop + h, sy0 = scrollY;
+        const ops = [], waits = [];
+        const visible = r => r.bottom > vTop && r.top < vBot && r.width > 0 && r.height > 0;
+        const opacityOf = el => { let op = 1; for (let e = el; e && e !== document.body; e = e.parentElement) op *= parseFloat(getComputedStyle(e).opacity); return op; };
+        const imgCache = this.imgs || (this.imgs = new Map());
+        const loadImg = src => { if (imgCache.has(src)) return imgCache.get(src);
+          const p = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); imgCache.set(src, p); return p; };
+        const bgOps = (el, r, cs, op) => {
+          const rad = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, r.width / 2, r.height / 2);
           const X = r.left, Y = r.top - vTop, path = new Path2D(); path.roundRect ? path.roundRect(X, Y, r.width, r.height, rad) : path.rect(X, Y, r.width, r.height);
-          if (cs.backgroundColor && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor)) { x.fillStyle = cs.backgroundColor; x.fill(path); }
-          const lg = /linear-gradient\((\d+(?:\.\d+)?)deg,(.*)\)$/.exec(cs.backgroundImage || "");
-          if (lg) {
-            const a = parseFloat(lg[1]) * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a), cx = X + r.width / 2, cy = Y + r.height / 2;
-            const L = Math.abs(r.width * dx) + Math.abs(r.height * dy), gr = x.createLinearGradient(cx - dx * L / 2, cy - dy * L / 2, cx + dx * L / 2, cy + dy * L / 2);
-            const stops = [...lg[2].matchAll(/(rgba?\([^)]*\))\s*([\d.]+%)?/g)];
-            stops.forEach((m, i) => gr.addColorStop(m[2] ? parseFloat(m[2]) / 100 : i / Math.max(1, stops.length - 1), m[1]));
-            x.fillStyle = gr; x.fill(path);
+          const col = cs.backgroundColor, bi = cs.backgroundImage;
+          if (col && !/rgba\(0, 0, 0, 0\)|transparent/.test(col)) ops.push(x => { x.globalAlpha = op; x.fillStyle = col; x.fill(path); });
+          if (!bi || bi === "none") return;
+          const layers = bi.split(/,(?![^(]*\))(?=\s*(?:linear|radial|url))/).reverse();   // css paints the first layer on top
+          for (const layer of layers) {
+            const lg = /^\s*linear-gradient\((\d+(?:\.\d+)?)deg,(.*)\)\s*$/.exec(layer);
+            if (lg) { ops.push(x => { const a = parseFloat(lg[1]) * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a), cx = X + r.width / 2, cy = Y + r.height / 2;
+                const Lg = Math.abs(r.width * dx) + Math.abs(r.height * dy), gr = x.createLinearGradient(cx - dx * Lg / 2, cy - dy * Lg / 2, cx + dx * Lg / 2, cy + dy * Lg / 2);
+                const stops = [...lg[2].matchAll(/(rgba?\([^)]*\)|transparent)\s*([\d.]+%)?/g)];
+                stops.forEach((m, i) => gr.addColorStop(Math.min(1, m[2] ? parseFloat(m[2]) / 100 : i / Math.max(1, stops.length - 1)), m[1] === "transparent" ? "rgba(0,0,0,0)" : m[1]));
+                x.globalAlpha = op; x.fillStyle = gr; x.fill(path); }); continue; }
+            const u = /^\s*url\("?(.*?)"?\)\s*$/.exec(layer);
+            if (u) { const pr = loadImg(u[1]); waits.push(pr); ops.push(async x => { const im = await pr; if (!im) return; const pat = x.createPattern(im, "repeat");
+                pat.setTransform && pat.setTransform(new DOMMatrix().translate(X, Y)); x.globalAlpha = op; x.fillStyle = pat; x.fill(path); }); }
           }
         };
-        document.querySelectorAll(".lensbg, .glass .bar").forEach(el => { if (!el.closest(".nav")) paintBg(el); });
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: n => {
-          const el = n.parentElement; if (!el || !n.nodeValue.trim() || el.closest(".nav, script, style, svg, canvas, [hidden]")) return NodeFilter.FILTER_REJECT;
-          const r = el.getBoundingClientRect(); return r.bottom > vTop && r.top < vBot && r.width ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } });
+        const PROPS = ["fill", "stroke", "stroke-width", "stroke-opacity", "fill-opacity", "opacity", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "transform", "transform-origin", "transform-box", "display", "visibility", "font-family", "font-size", "letter-spacing", "filter"];
+        const svgOps = (svg, r, op) => {
+          const clone = svg.cloneNode(true), a = [svg, ...svg.querySelectorAll("*")], c = [clone, ...clone.querySelectorAll("*")];
+          a.forEach((el, i) => { const cs = getComputedStyle(el); c[i].setAttribute("style", PROPS.map(pn => `${pn}:${cs.getPropertyValue(pn)}`).join(";")); });
+          const cs = getComputedStyle(svg), W = svg.clientWidth || r.width, H = svg.clientHeight || r.height;
+          clone.style.transform = "none"; clone.setAttribute("width", W); clone.setAttribute("height", H);
+          if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+          const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+          const pr = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); waits.push(pr);
+          const m = cs.transform && cs.transform !== "none" ? new DOMMatrix(cs.transform) : null, cx = r.left + r.width / 2, cy = r.top - vTop + r.height / 2;
+          ops.push(async x => { const im = await pr; if (!im) return; x.save(); x.globalAlpha = op; x.translate(cx, cy); if (m) x.transform(m.a, m.b, m.c, m.d, 0, 0); x.drawImage(im, -W / 2, -H / 2, W, H); x.restore(); });
+        };
         const range = document.createRange();
-        for (let n; (n = walker.nextNode());) {
-          const el = n.parentElement, cs = getComputedStyle(el); if (cs.visibility === "hidden") continue;
-          let op = 1; for (let e = el; e && e !== document.body; e = e.parentElement) op *= parseFloat(getComputedStyle(e).opacity);
-          if (op < .02) continue;
-          x.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; x.fillStyle = cs.color; x.globalAlpha = op;
-          const ts = cs.textShadow && cs.textShadow !== "none" ? cs.textShadow : "";
-          const up = cs.textTransform === "uppercase", m = x.measureText("Hg"), fz = parseFloat(cs.fontSize);
-          const asc = m.fontBoundingBoxAscent || fz * .8, desc = m.fontBoundingBoxDescent || fz * .2;
-          const str = n.nodeValue;
-          for (let i = 0; i < str.length; i++) {
-            const ch = str[i]; if (/\s/.test(ch)) continue;
+        const textOps = (n, el, cs, op) => {
+          const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, color = cs.color, ts = cs.textShadow && cs.textShadow !== "none" ? cs.textShadow : "";
+          const up = cs.textTransform === "uppercase", str = n.nodeValue, fz = parseFloat(cs.fontSize), glyphs = [];
+          for (let i = 0; i < str.length; i++) { const ch = str[i]; if (/\s/.test(ch)) continue;
             range.setStart(n, i); range.setEnd(n, i + 1); const r = range.getClientRects()[0]; if (!r || r.bottom < vTop || r.top > vBot) continue;
-            // the reported box may be the font's content area or the (tighter) line box: the content area is centred in it
-            const glyph = up ? ch.toUpperCase() : ch, X = r.left, Y = r.top - vTop + (r.height - asc - desc) / 2 + asc;
-            if (ts) { const parts = ts.split(/,(?![^(]*\))/); for (const sh of parts) { const col = (sh.match(/rgba?\([^)]*\)/) || ["rgba(0,0,0,0)"])[0], nums = sh.replace(/rgba?\([^)]*\)/, "").trim().split(/\s+/).map(parseFloat);
-              x.save(); x.shadowColor = col; x.shadowOffsetX = nums[0] || 0; x.shadowOffsetY = nums[1] || 0; x.shadowBlur = (nums[2] || 0); x.fillText(glyph, X, Y); x.restore(); } }
-            x.fillText(glyph, X, Y);
-          }
-        }
-        x.globalAlpha = 1;
-        const g = navP.g; g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, navP.txt); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, cv2); g.activeTexture(g.TEXTURE0);
-        this.top = top; this.w = w; this.h = h; this.ready = true;
+            glyphs.push([up ? ch.toUpperCase() : ch, r.left, r.top - vTop, r.height]); }
+          if (!glyphs.length) return;
+          ops.push(x => { x.globalAlpha = op; x.font = font; x.fillStyle = color; const mm = x.measureText("Hg"), asc = mm.fontBoundingBoxAscent || fz * .8, desc = mm.fontBoundingBoxDescent || fz * .2;
+            const shadows = ts ? ts.split(/,(?![^(]*\))/).map(sh => { const col = (sh.match(/rgba?\([^)]*\)/) || ["rgba(0,0,0,0)"])[0], nums = sh.replace(/rgba?\([^)]*\)/, "").trim().split(/\s+/).map(parseFloat); return [col, nums[0] || 0, nums[1] || 0, nums[2] || 0]; }) : [];
+            for (const [g, X, Y0, Hh] of glyphs) { const Y = Y0 + (Hh - asc - desc) / 2 + asc;   // content area centred in the reported box
+              for (const [col, ox, oy, bl] of shadows) { x.save(); x.shadowColor = col; x.shadowOffsetX = ox; x.shadowOffsetY = oy; x.shadowBlur = bl; x.fillText(g, X, Y); x.restore(); }
+              x.fillText(g, X, Y); } });
+        };
+        const walk = el => {
+          if (el.matches(".nav, script, style, canvas.glsky, .lensfix, [hidden]")) return;
+          const r = el.getBoundingClientRect(); if (!visible(r) && !el.matches("html, body, #vscroll, main, header, footer, section, .wrap")) return;
+          const cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden") return;
+          const op = visible(r) ? opacityOf(el) : 1; if (op < .02) return;
+          if (visible(r) && !el.matches("body, html")) bgOps(el.matches(".glass.bgoff") ? el : el, r, cs, op);
+          if (el.tagName.toLowerCase() === "svg") { if (visible(r)) svgOps(el, r, op); return; }
+          if (el.tagName === "CANVAS") { if (visible(r)) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
+          for (const ch of el.childNodes) { if (ch.nodeType === 3) { if (ch.nodeValue.trim()) textOps(ch, el, cs, op); } else if (ch.nodeType === 1) walk(ch); }
+        };
+        walk(document.body);
+        const cv2 = document.createElement("canvas"); cv2.width = Math.round(w * k); cv2.height = Math.round(h * k);
+        Promise.all(waits).then(async () => {
+          const x = cv2.getContext("2d"); x.setTransform(k, 0, 0, k, 0, 0);
+          for (const op of ops) await op(x);
+          x.globalAlpha = 1;
+          const g = navP.g; g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, navP.txt); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, cv2); g.activeTexture(g.TEXTURE0);
+          this.cv = cv2; this.top = top; this.w = w; this.h = h; this.ready = true; this.busy = false;
+          drawLens(navP);
+          if (this.pending) { this.pending = false; this.snap(navP.el.getBoundingClientRect()); }
+        });
       } };
     if (navP) {
       const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
