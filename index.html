@@ -57,8 +57,8 @@
 
   /* ---------- weathered glass ---------- */
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
-    background: linear-gradient(160deg, rgba(255,248,238,.11), rgba(255,240,220,.03) 45%, rgba(255,240,220,.05));
-    backdrop-filter: blur(5px) brightness(1.04); -webkit-backdrop-filter: blur(5px) brightness(1.04);
+    background: linear-gradient(160deg, rgba(255,248,238,.06), rgba(255,240,220,.01) 45%, rgba(255,240,220,.03));
+    backdrop-filter: blur(3px) brightness(1.04); -webkit-backdrop-filter: blur(3px) brightness(1.04);
     box-shadow: inset 0 0 24px rgba(255,250,240,.08), 0 18px 44px -22px rgba(60, 20, 5, .5); }
   /* no painted outline. the rim light is computed per element from the glass's own shape (see RIM in the script):
      each pixel of the curved bevel is lit by how much it faces the light, the far side catches a weaker internal reflection,
@@ -68,7 +68,7 @@
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
-  .tele { background: linear-gradient(160deg, rgba(255,248,238,.25), rgba(255,240,220,.11) 45%, rgba(255,240,220,.15)); }
+  .tele { background: linear-gradient(160deg, rgba(255,248,238,.19), rgba(255,240,220,.07) 45%, rgba(255,240,220,.1)); }
   .bar { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--ink-line); background: rgba(26,18,13,.06); }
   .bar .id { padding-right: 14px; border-right: 1px solid var(--ink-line); color: var(--ink-dim); }
   .bar .sp { flex: 1; }
@@ -156,7 +156,7 @@
   .tele .hot { color: #7a1d0a; }
   .tele.now .hot { color: var(--ink); }
   .tele.resolving .tele-head, .tele.resolving .stats { animation: blink 1.1s infinite; }
-  .tele.now { background: linear-gradient(160deg, rgba(240,246,255,.45), rgba(225,236,255,.19) 45%, rgba(225,236,255,.09)); }
+  .tele.now { background: linear-gradient(160deg, rgba(240,246,255,.38), rgba(225,236,255,.14) 45%, rgba(225,236,255,.06)); }
   .scratches { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; border-radius: inherit; transition: opacity .15s; }
   .tele.now .scratches { opacity: 0; }
   .tele.glitch .tele-head, .tele.glitch .stats { animation: glitch .26s steps(2) 1; }
@@ -809,13 +809,13 @@
       const f = mk("filter", { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" }, defs);
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map" }, f);
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * 1.22, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .76, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * 1.4, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .6, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
       mk("feBlend", { in: "cR", in2: "cG", mode: "screen", result: "rg" }, f);
       mk("feBlend", { in: "rg", in2: "cB", mode: "screen", result: "rgb" }, f);
-      mk("feGaussianBlur", { in: "rgb", stdDeviation: .7, result: "soft" }, f);
+      mk("feGaussianBlur", { in: "rgb", stdDeviation: .35, result: "soft" }, f);
       // no saturation boost: glass bends light, it doesn't add colour. a touch of brightness, like light passing through
       const ct = mk("feComponentTransfer", { in: "soft" }, f);
       ["feFuncR", "feFuncG", "feFuncB"].forEach(t => mk(t, { type: "linear", slope: 1.04 }, ct));
@@ -846,7 +846,7 @@
   /* ---------- RIM: the light on the glass's curved edge, for every browser ---------- */
   (() => {
     const L = [.42, -.91];                                   // light from above, a little to the right (where the sun is)
-    const prof = d => d < 0 ? 0 : .9 * Math.exp(-d / .8) + .2 * Math.exp(-d / 5);   // a sharp line on the very edge, a soft glow inside it
+    const prof = d => d < -1.5 ? 0 : .7 * Math.exp(-Math.abs(d) / 3.2) + .2 * Math.exp(-Math.abs(d) / 9);  // a thick bevel: a broad bright band, a soft glow inside it
     function rim(el) {
       const w = el.offsetWidth, h = el.offsetHeight; if (!w || !h) return;
       const k = Math.min(devicePixelRatio || 1, 2), W = Math.round(w * k), H = Math.round(h * k);
@@ -859,12 +859,12 @@
         if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; d = r - l; nx = qx / l * Math.sign(px - cx); ny = qy / l * Math.sign(py - cy); }
         else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
         else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
-        if (d > 16) continue;
+        if (d > 24) continue;
         const f = nx * L[0] + ny * L[1], lit = f > 0 ? f ** 1.6 : 0, back = f < 0 ? (-f) ** 2.2 * .42 : 0, g = lit + back + .05;
         // the prism: each colour comes off the bevel at a slightly different depth
-        const R = g * prof(d), G = g * prof(d - .35), B = g * prof(d - .75), a = Math.min(1, Math.max(R, G, B));
+        const R = g * prof(d), G = g * prof(d - 1.8), B = g * prof(d - 3.6), a = Math.min(1, Math.max(R, G, B));  // the colours fan out through the thickness
         if (a < .004) continue;
-        const i = (Y * W + X) * 4, tint = c0 => 255 * (.55 + .45 * Math.min(1, c0 / a));   // mostly white light, a fringe of colour
+        const i = (Y * W + X) * 4, tint = c0 => 255 * (.5 + .5 * Math.min(1, c0 / a));   // mostly white light, a fringe of colour
         D[i] = tint(R); D[i + 1] = tint(G); D[i + 2] = tint(B); D[i + 3] = 255 * a;
       }
       c.putImageData(img, 0, 0);

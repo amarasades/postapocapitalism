@@ -95,9 +95,9 @@ Top to bottom:
 ### Liquid glass (`LG` module)
 - **Real refraction, in Chromium only** (`backdrop-filter: url(#svgFilter)` isn't supported in Safari or Firefox, which includes every iPhone browser). The `html.lg` class is set when it's active.
 - **How it works:** a per-element displacement map is generated on a `<canvas>` from the rounded-rect signed distance field (plus the chip outline for `#tele`). It feeds an `feDisplacementMap` with an **RGB split** (chromatic aberration: R ×1.2, G ×.93, B ×.66 of the scale; the owner asked for more), a light blur, no saturation.
-- **No painted outline.** The old 1.2px white gradient border and white inset shadows read as "paint". The rim is now **computed per element (RIM module)** from the rounded-rect distance field: each bevel pixel is lit by how much it faces the light (from above, a little right, where the sun is), the far side gets a weaker internal reflection, and R/G/B peak at slightly different depths (mostly white, a fringe of colour) = a prism highlight. It's a data-URL image in `--rim` on `.glass::before`, rebuilt on resize, and works in every browser.
-- **Lens (Chromium):** bevel band 14–34px, displacement scale 40–110px, R ×1.22 / G ×1 / B ×.76.
-- **Fills are light** (owner asked ~5% more see-through): `.glass` .11/.03/.05, `.tele` .25/.11/.15, `.tele.now` .45/.19/.09.
+- **No painted outline.** The old 1.2px white gradient border and white inset shadows read as "paint". The rim is now **computed per element (RIM module)** from the rounded-rect distance field: each bevel pixel is lit by how much it faces the light (from above, a little right, where the sun is), the far side gets a weaker internal reflection, and R/G/B peak at different depths (0 / 1.8 / 3.6px, each band ~3px wide so they blend into one smooth warm-to-cool gradient, half white) = a **thick** prism bevel. Narrower offsets read as "thin glass"; narrow bands read as separate rainbow stripes (both rejected). It's a data-URL image in `--rim` on `.glass::before`, rebuilt on resize, and works in every browser.
+- **Lens (Chromium):** bevel band 14–34px, displacement scale 40–110px, R ×1.4 / G ×1 / B ×.6 (strong aberration), blur .35.
+- **Frost is minimal:** `.glass` fill .06/.01/.03, fallback blur 3px; `.tele` .19/.07/.1; `.tele.now` .38/.14/.06.
 - Filters are rebuilt on resize. New ones are created *before* the old ones are removed, to avoid a flash.
 - **Fallback:** clear glass with `blur(5px) saturate(160%)`.
 - **Specular rim:** `.glass::before` (masked gradient border).
