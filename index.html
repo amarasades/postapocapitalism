@@ -60,15 +60,24 @@
      and red / green / blue peak at slightly different depths, so the highlight splits like a prism */
   .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
     background: var(--rim, none) center / 100% 100% no-repeat; }
-  .glsky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; }
-  html.glbg .sky, html.glbg .sun { visibility: hidden; }
-  /* on the GL path the glass doesn't blur the backdrop: re-blurring 7 panels over a canvas that changes every frame was
-     the main cost on iPhone */
-  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; clip-path: inset(0 round var(--r, 20px)); }
-  /* the clip-path clips the panel's screen-fixed lens canvas to the panel, and moves with it in the same frame */
-  /* parented to its panel: it moves with the panel, so the bend is always on the panel's own edge. (a screen-fixed version
-     kept showing an old picture during iPhone momentum scrolling: stray rainbow bands in the middle of the cards) */
-  .lensfix { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }   /* still laid out and animating: the GL sky reads them */
+  /* ---------- FRINGE: the glass edge for browsers that can't bend the backdrop (Safari, every iPhone browser, Firefox) ----------
+     pure layers, no code while scrolling: inside each panel's edge band sit copies of the sky and the sun, position:fixed
+     exactly like the real ones, so the phone's own scrolling engine places them in the same frame (no lag, ever). in that
+     band the sun is magnified like a thick lens edge, red / green / blue at different sizes (lighten-blended channel copies)
+     = a real rainbow fringe at the sun's rim. the band fades into the clear middle (a computed mask), so there's no
+     second, unbent sun edge showing through. the panel's clip-path keeps all of it inside the panel. */
+  html.fr .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; clip-path: inset(0 round var(--r, 20px)); }
+  .fringe { position: absolute; inset: 0; z-index: -1; pointer-events: none; isolation: isolate;
+    -webkit-mask: var(--band) center / 100% 100% no-repeat; mask: var(--band) center / 100% 100% no-repeat; }
+  .fringe > * { z-index: auto !important; }
+  .fringe > .sun { mix-blend-mode: lighten; }
+  .fringe > .sun.r { transform: scale(1.18); background: radial-gradient(circle, rgb(255,0,0) 0 58%, rgba(255,0,0,.55) 64%, transparent 72%); box-shadow: 0 0 120px 60px rgba(255,0,0,.35); }
+  .fringe > .sun.g { transform: scale(1); background: radial-gradient(circle, rgb(0,241,0) 0 58%, rgba(0,226,0,.55) 64%, transparent 72%); box-shadow: 0 0 120px 60px rgba(0,190,0,.35); }
+  .fringe > .sun.b { transform: scale(1.09); background: radial-gradient(circle, rgb(0,0,214) 0 58%, rgba(0,0,180,.55) 64%, transparent 72%); box-shadow: 0 0 120px 60px rgba(0,0,120,.35); }
+  .fringe > .tint { position: absolute; inset: 0; background: rgb(246,242,239); mix-blend-mode: multiply; }
+  .fringe > .fill { position: absolute; inset: 0; background: linear-gradient(160deg, rgba(255,248,238,.06), rgba(255,240,220,.01) 45%, rgba(255,240,220,.03)); }
+  .tele > .fringe > .fill { background: linear-gradient(160deg, rgba(255,248,238,.19), rgba(255,240,220,.07) 45%, rgba(255,240,220,.1)); }
+  .tele.now > .fringe > .fill { background: linear-gradient(160deg, rgba(240,246,255,.38), rgba(225,236,255,.14) 45%, rgba(225,236,255,.06)); }
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -966,133 +975,28 @@
     els.forEach(el => { rim(el); ro?.observe(el); });
   })();
 
-  /* ---------- GL SKY + GL GLASS (iPhone, Safari, Firefox: browsers that can't bend the backdrop) ----------
-     1. one fixed full-screen WebGL canvas draws the sky and sun (a faithful copy of the CSS layers, then hidden).
-        nothing in it moves, so it's drawn once (and on resize) and can't lag behind anything.
-     2. every glass panel has its own small WebGL canvas, inside the panel, so it scrolls WITH the panel: its edge is always
-        exactly on the panel's edge. it draws the same scene, bent through the panel's bevel (red / green / blue bent by
-        different amounts), plus the panel's own tint, and fades into the real thing at the inner end of the bevel.
-        if a frame is late, only the picture inside the bend is a frame old, never the geometry.
-     Chromium keeps the CSS sky + real backdrop refraction (LG). preview this path in Chrome with ?glass=gl */
+  /* ---------- FRINGE setup (see the CSS). code runs only on load / resize, never while scrolling ---------- */
   (() => {
-    if (LG || !window.WebGLRenderingContext || /glass=plain/.test(location.search)) return;
-    const COMMON = `precision highp float;
-      uniform vec2 uVp; uniform vec3 uSun;
-      float erf_(float x){ float x2 = x*x, a = .147; float t = sqrt(1. - exp(-x2*(1.2732 + a*x2)/(1. + a*x2))); return x < 0. ? -t : t; }
-      vec3 sky(float t){ t = clamp(t, 0., 1.);
-        vec3 c0=vec3(122.,46.,20.)/255., c1=vec3(185.,89.,42.)/255., c2=vec3(217.,138.,69.)/255., c3=vec3(236.,192.,138.)/255., c4=vec3(243.,220.,184.)/255.;
-        if (t < .28) return mix(c0, c1, t/.28); if (t < .55) return mix(c1, c2, (t-.28)/.27); if (t < .78) return mix(c2, c3, (t-.55)/.23); return mix(c3, c4, (t-.78)/.22); }
-      vec3 scene(vec2 p){
-        vec3 c = sky(p.y / uVp.y);
-        float S = uSun.z, Rs = .5*S, d = length(p - uSun.xy);
-        vec4 glow = vec4(1., 190./255., 120./255., .35 * .5 * (1. - erf_((d - Rs - 60.) / 84.853)));   // box-shadow: spread 60, blur 120
-        vec3 sc = vec3(1., 241./255., 214./255.), rc = vec3(1., 226./255., 180./255.);
-        vec4 disc = d < .41*S ? vec4(sc, 1.) : d < .4525*S ? mix(vec4(sc, 1.), vec4(rc, .55), (d - .41*S)/(.0425*S)) : mix(vec4(rc, .55), vec4(rc, 0.), clamp((d - .4525*S)/(.0565*S), 0., 1.));
-        vec4 sun = mix(disc, glow, smoothstep(Rs - 2.2, Rs + .5, d));
-        c = mix(c, sun.rgb, sun.a * .9);
-        return c; }`;
-    const SKY_FS = COMMON + `
-      void main(){ gl_FragColor = vec4(scene(vec2(gl_FragCoord.x, uVp.y - gl_FragCoord.y)), 1.); }`;
-    // one panel's bend, in screen coordinates. drawn on a screen-fixed canvas that lives INSIDE the panel and is clipped
-    // to the panel's shape by the browser: the clip moves with the panel in the same frame (so nothing ever spills or
-    // trails outside it), and the picture stays fixed to the screen like the sun (so the rainbow doesn't lag)
-    const LENS_FS = COMMON + `
-      uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2; uniform float uFbH;
-      void main(){
-        vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y), p = uRect.xy + lp, h = uRect.zw * .5;
-        float R = uGeo.x, Bv = uGeo.y;
-        vec2 q = abs(lp - h) - (h - R);
-        float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - R);
-        vec2 g = max(abs(lp - h) - (h - max(R, Bv + 1.)), 0.) * sign(lp - h);
-        if (dd < -2. || dd > Bv || length(g) == 0. || (uChip.z > 0. && lp.x > uChip.x && lp.y > uChip.y)) { gl_FragColor = vec4(0.); return; }
-        float t = 1. - clamp(dd / Bv, 0., 1.), m = t*t*(3. - 2.*t)*t;
-        vec2 off = -normalize(g) * m * uGeo.z;
-        vec3 straight = scene(p), bent = vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b);
-        vec3 dc = abs(bent - straight);
-        // only where the bend has real contrast to work with (the sun's edge). a bent sky gradient changes the colour a
-        // little too, and a late frame of THAT showed as a band inside the cards; now nothing is drawn there at all
-        float vis = smoothstep(.07, .16, max(dc.r, max(dc.g, dc.b)));
-        vec3 c = bent * vec3(246.,242.,239.)/255.;                          // the page tint, which this canvas sits above
-        vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uRect.z + .9397*uRect.w) + .5;
-        vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
-        c = mix(c, f.rgb, f.a);                                              // the panel's own tint (this canvas sits above it too)
-        float a = vis * (1. - smoothstep(Bv * .75, Bv, dd));
-        gl_FragColor = vec4(c * a, a);
-      }`;
-    const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
-    const program = (gl, fs, names) => {
-      const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
-      const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
-      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
-      gl.useProgram(pr);
-      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-      const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      const U = {}; names.forEach(k => U[k] = gl.getUniformLocation(pr, k)); return U;
+    if (LG || /glass=plain/.test(location.search)) return;
+    document.documentElement.classList.add("fr");
+    const band = el => {   // the edge band as a mask: opaque at the rim, fading to nothing by the bevel's inner end
+      const w = el.offsetWidth, h = el.offsetHeight; if (!w || !h) return;
+      const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2), B = Math.max(14, Math.min(34, Math.min(w, h) * .36));
+      const W = Math.ceil(w / 2), H = Math.ceil(h / 2), c = document.createElement("canvas"); c.width = W; c.height = H;   // half resolution: it's a soft ramp
+      const x = c.getContext("2d"), img = x.createImageData(W, H), D = img.data, cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
+      for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+        const px = (X + .5) * 2, py = (Y + .5) * 2, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
+        const d = r - (qx > 0 && qy > 0 ? Math.hypot(qx, qy) : Math.max(qx, qy)), t = Math.max(0, 1 - d / B);
+        D[(Y * W + X) * 4 + 3] = 255 * t * t * (3 - 2 * t);
+      }
+      x.putImageData(img, 0, 0); el.querySelector(".fringe").style.setProperty("--band", `url(${c.toDataURL()})`);
     };
-    const SCENE_U = ["uVp", "uSun"];
-    const opts = { antialias: false, depth: false, stencil: false, powerPreference: "high-performance" };
-
-    // 1. the sky
-    const cv = document.createElement("canvas"); cv.className = "glsky"; cv.setAttribute("aria-hidden", "true");
-    const gl = cv.getContext("webgl", { ...opts, alpha: false });
-    if (!gl) return;
-    const SU = program(gl, SKY_FS, SCENE_U); if (!SU) return;
-    const skyEl = document.querySelector(".sky"), sunEl = document.querySelector(".sun");
-    skyEl.after(cv); document.documentElement.classList.add("glbg");
-    let vw = 0, vh = 0, sun = [0, 0, 0];
-    const measureFixed = () => { const r = skyEl.getBoundingClientRect(); vw = r.width; vh = r.height; cv.width = Math.round(vw); cv.height = Math.round(vh);
-      const s = sunEl.getBoundingClientRect(); sun = [s.left + s.width / 2, s.top + s.height / 2, s.width]; };
-    const setScene = (g, U) => { g.uniform2f(U.uVp, vw, vh); g.uniform3f(U.uSun, sun[0], sun[1], sun[2]); };
-
-    const drawSky = () => { gl.viewport(0, 0, cv.width, cv.height); setScene(gl, SU); gl.drawArrays(gl.TRIANGLES, 0, 3); };
-
-    // 2. the glass: a screen-fixed lens canvas inside each panel, clipped by the panel (see LENS_FS)
-    const FILL = { glass: [[255, 248, 238, .06], [255, 240, 220, .01], [255, 240, 220, .03]], tele: [[255, 248, 238, .19], [255, 240, 220, .07], [255, 240, 220, .1]], now: [[240, 246, 255, .38], [225, 236, 255, .14], [225, 236, 255, .06]] };
-    const panels = [...document.querySelectorAll(".glass")].map(el => {
-      const c = document.createElement("canvas"); c.className = "lensfix"; c.setAttribute("aria-hidden", "true");
-      const g = c.getContext("webgl", { ...opts, alpha: true, premultipliedAlpha: true }); if (!g) return null;
-      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFbH"]); if (!U) return null;
-      el.prepend(c);
-      return { el, c, g, U, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0, on: false };
-    }).filter(Boolean);
-    const measure = () => panels.forEach(P => { const b = P.el.getBoundingClientRect(); P.x = b.left; P.y = b.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight;
-      P.r = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
-      const W = Math.round(P.w), H = Math.round(P.h); if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; } });
-    const drawLens = P => {
-      if (!P.on || !P.w) return;
-      const { g, U } = P, b = P.el.getBoundingClientRect();   // live, every draw: cached positions went stale when the forecast loaded and pushed the cards down
-      P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
-      if (P.c.width !== Math.round(P.w) || P.c.height !== Math.round(P.h)) { P.c.width = Math.round(P.w); P.c.height = Math.round(P.h); }
-      g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height); setScene(g, U);
-      g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
-      g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .5);
-      const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
-      const F = P.el === tele ? (mode === "now" ? FILL.now : FILL.tele) : FILL.glass;
-      [U.uF0, U.uF1, U.uF2].forEach((u, i) => g.uniform4f(u, F[i][0] / 255, F[i][1] / 255, F[i][2] / 255, F[i][3]));
-      g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
-    };
-    // Safari's toolbars shrink / grow while you scroll, which resizes the screen. the canvases were left at their old pixel
-    // size and got stretched, so the bend sat too high or low and STAYED there. every draw now checks the real size first
-    const syncSize = () => { const r = skyEl.getBoundingClientRect();
-      if (Math.round(r.width) !== cv.width || Math.round(r.height) !== cv.height) { measureFixed(); measure(); drawSky(); } };
-    let settle = 0;
-    const drawLenses = () => { syncSize(); panels.forEach(drawLens);
-      clearTimeout(settle); settle = setTimeout(() => { syncSize(); panels.forEach(drawLens); }, 140); };   // one clean redraw after the scroll stops
-    if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) { P.on = e.isIntersecting; P.c.style.display = P.on ? "" : "none"; if (P.on) drawLens(P); } }), { rootMargin: "40px" }); panels.forEach(P => io.observe(P.el)); }
-    else panels.forEach(P => P.on = true);
-
-    measureFixed(); measure(); drawSky(); drawLenses();
-    // the sky is static (drawn once, and on resize); the lenses redraw straight from the scroll event
-    let dirty = false;
-    const flush = () => { if (dirty) { dirty = false; drawSky(); drawLenses(); } };
-    const later = () => { if (!dirty) { dirty = true; requestAnimationFrame(flush); } };
-    addEventListener("scroll", drawLenses, { passive: true });
-    addEventListener("resize", () => { measureFixed(); measure(); later(); });
-    if (window.visualViewport) visualViewport.addEventListener("resize", () => { measureFixed(); measure(); later(); });
-    if ("onscrollend" in window) addEventListener("scrollend", () => drawLenses());
-    if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); later(); }).observe(document.body);
-    if (document.fonts) document.fonts.ready.then(() => { measure(); later(); });
-    window.glSkyDirty = later;
+    document.querySelectorAll(".glass").forEach(el => {
+      const f = document.createElement("div"); f.className = "fringe"; f.setAttribute("aria-hidden", "true");
+      f.innerHTML = '<div class="sky"></div><div class="sun r"></div><div class="sun g"></div><div class="sun b"></div><div class="tint"></div><div class="fill"></div>';
+      el.prepend(f); band(el);
+    });
+    if ("ResizeObserver" in window) { const ro = new ResizeObserver(es => es.forEach(e => band(e.target))); document.querySelectorAll(".glass").forEach(el => ro.observe(el)); }
   })();
 
   /* ---------- damage: only the inherited glass is broken ----------
@@ -1255,7 +1159,7 @@
   if (!(window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission))
     addEventListener("deviceorientation", e => { if (e.gamma == null) return; view.tx = clamp(e.gamma / 30, -1.5, 1.5); view.ty = clamp((e.beta - 45) / 30, -1.5, 1.5); repaint(); }, { passive: true });
 
-  function applyClip() { tele.style.clipPath = mode === "future" ? biteClip : (document.documentElement.classList.contains("glbg") ? "inset(0 round 28px)" : "none"); if (LG) LG.show(tele); if (typeof paint === "function") repaint(); if (window.glSkyDirty) glSkyDirty(); }
+  function applyClip() { tele.style.clipPath = mode === "future" ? biteClip : (document.documentElement.classList.contains("fr") ? "inset(0 round 28px)" : "none"); if (LG) LG.show(tele); if (typeof paint === "function") repaint(); if (window.glSkyDirty) glSkyDirty(); }
   damage();
   if ("ResizeObserver" in window) new ResizeObserver(damage).observe(tele);
   if (document.fonts) document.fonts.ready.then(() => damage()); // the chip is placed against text, so re-cut once fonts land
