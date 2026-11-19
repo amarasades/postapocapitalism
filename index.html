@@ -59,13 +59,12 @@
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
     background: linear-gradient(160deg, rgba(255,248,238,.11), rgba(255,240,220,.03) 45%, rgba(255,240,220,.05));
     backdrop-filter: blur(5px) brightness(1.04); -webkit-backdrop-filter: blur(5px) brightness(1.04);
-    /* the last two insets are dispersion at the bevel: warm where the light enters (top-left), blue where it leaves */
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.75), inset 0 -1px 1px rgba(255,255,255,.22), inset 0 0 24px rgba(255,250,240,.11), 0 18px 44px -22px rgba(60, 20, 5, .5),
-      inset 3px 3px 3px -1.5px rgba(255,60,110,.22), inset -3px -3px 3px -1.5px rgba(40,140,255,.26); }
-  /* specular rim: bright where the light hits, almost gone on the sides */
-  .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; padding: 1.2px;
-    background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(255,255,255,.18) 28%, rgba(255,255,255,0) 50%, rgba(255,255,255,.2) 78%, rgba(255,255,255,.7));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+    box-shadow: inset 0 0 24px rgba(255,250,240,.08), 0 18px 44px -22px rgba(60, 20, 5, .5); }
+  /* no painted outline. the rim light is computed per element from the glass's own shape (see RIM in the script):
+     each pixel of the curved bevel is lit by how much it faces the light, the far side catches a weaker internal reflection,
+     and red / green / blue peak at slightly different depths, so the highlight splits like a prism */
+  .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
+    background: var(--rim, none) center / 100% 100% no-repeat; }
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -776,7 +775,7 @@
     function lens(w, h, r, chip) {
       const cvs = document.createElement("canvas"); cvs.width = w; cvs.height = h;
       const ctx = cvs.getContext("2d"), img = ctx.createImageData(w, h), D = img.data;
-      const B = Math.max(10, Math.min(24, Math.min(w, h) * .32)), cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
+      const B = Math.max(14, Math.min(34, Math.min(w, h) * .36)), cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
       let bb = null, segs = null, poly = null;
       if (chip) {
         poly = chip; segs = [];
@@ -810,7 +809,7 @@
       const f = mk("filter", { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" }, defs);
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map" }, f);
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * 1.2, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale * .93, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .66, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * 1.22, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .76, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
@@ -828,7 +827,7 @@
       const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
       // build the new filters first, swap, then drop the old ones, so the glass never flashes
       const id = "lg" + n++, old = el._lgIds || [];
-      const scale = Math.min(70, Math.max(30, Math.min(w, h) * .45));
+      const scale = Math.min(110, Math.max(40, Math.min(w, h) * .6));
       el._lgBase = filter(id, w, h, lens(w, h, r, null), scale);
       el._lgChip = chip ? filter(id + "c", w, h, lens(w, h, r, chip), scale) : null;
       el._lgIds = chip ? [id, id + "c"] : [id];
@@ -842,6 +841,38 @@
     const ro = "ResizeObserver" in window ? new ResizeObserver(es => es.forEach(e => e.target !== tele && apply(e.target))) : null;
     document.querySelectorAll(".glass").forEach(el => { if (el !== tele) { apply(el); ro?.observe(el); } });
     return { apply, show };
+  })();
+
+  /* ---------- RIM: the light on the glass's curved edge, for every browser ---------- */
+  (() => {
+    const L = [.42, -.91];                                   // light from above, a little to the right (where the sun is)
+    const prof = d => d < 0 ? 0 : .9 * Math.exp(-d / .8) + .2 * Math.exp(-d / 5);   // a sharp line on the very edge, a soft glow inside it
+    function rim(el) {
+      const w = el.offsetWidth, h = el.offsetHeight; if (!w || !h) return;
+      const k = Math.min(devicePixelRatio || 1, 2), W = Math.round(w * k), H = Math.round(h * k);
+      const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const c = cv.getContext("2d"), img = c.createImageData(W, H), D = img.data, cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
+      for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+        const px = (X + .5) / k, py = (Y + .5) / k, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
+        let d, nx, ny;
+        if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; d = r - l; nx = qx / l * Math.sign(px - cx); ny = qy / l * Math.sign(py - cy); }
+        else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
+        else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
+        if (d > 16) continue;
+        const f = nx * L[0] + ny * L[1], lit = f > 0 ? f ** 1.6 : 0, back = f < 0 ? (-f) ** 2.2 * .42 : 0, g = lit + back + .05;
+        // the prism: each colour comes off the bevel at a slightly different depth
+        const R = g * prof(d), G = g * prof(d - .35), B = g * prof(d - .75), a = Math.min(1, Math.max(R, G, B));
+        if (a < .004) continue;
+        const i = (Y * W + X) * 4, tint = c0 => 255 * (.55 + .45 * Math.min(1, c0 / a));   // mostly white light, a fringe of colour
+        D[i] = tint(R); D[i + 1] = tint(G); D[i + 2] = tint(B); D[i + 3] = 255 * a;
+      }
+      c.putImageData(img, 0, 0);
+      el.style.setProperty("--rim", `url(${cv.toDataURL()})`);
+    }
+    const els = document.querySelectorAll(".glass");
+    const ro = "ResizeObserver" in window ? new ResizeObserver(es => es.forEach(e => rim(e.target))) : null;
+    els.forEach(el => { rim(el); ro?.observe(el); });
   })();
 
   /* ---------- damage: only the inherited glass is broken ----------
@@ -921,7 +952,8 @@
     const yTxt = views ? String(views.future.gridS) : "2050", yw = Math.max(cctx.measureText(yTxt).width, 24);
     const yR = yr.right - tr.left, yT = yr.top - tr.top, yH = Math.max(yr.height, 13), yL = yR - yw;
     // the original chip's shape (84 × 52, rounded), scaled up evenly, no stretching, just until the year is inside it
-    const shape = k => { const CW = 72 * k, CH = 52 * k; return [[w, h - CH], [w - CW * .76, h - CH * .86], [w - CW, h]]; };  // a rounded bite, a little wider than tall
+    // the original chip (84 × 52, 15 flakes), scaled up as one piece: shape, jags and flakes all by the same factor
+    const shape = k => { const CW = 84 * k, CH = 52 * k; return [[w, h - CH], [w - CW * .62, h - CH * .78], [w - CW, h]]; };
     const inChip = ([A, B, D], [px, py]) => { const pts = [];
       for (let t = 0; t <= 1.001; t += .05) pts.push([(1 - t) ** 2 * A[0] + 2 * (1 - t) * t * B[0] + t * t * D[0], (1 - t) ** 2 * A[1] + 2 * (1 - t) * t * B[1] + t * t * D[1]]);
       pts.push([w, h]); let c = false;
@@ -929,14 +961,14 @@
       return c; };
     const must = [[yL - 1, yT + yH * .6], [yL + yw * .3, yT - 3], [yR + 2, yT - 4], [yL - 1, yT + yH]];  // all of the year (with room for the jagged edge), barely any of the word
     let k = 1; while (k < 5 && !must.every(q => inChip(shape(k), q))) k += .04;
-    const [P0, C, P3] = shape(k);
-    const N = Math.max(15, Math.round((Math.hypot(P0[0] - C[0], P0[1] - C[1]) + Math.hypot(C[0] - P3[0], C[1] - P3[1])) / 9)), ts = [];  // flakes stay small however big the chip is
+    const [P0, C, P3] = shape(k), ks = k;
+    const N = 15, ts = [];
     for (let i = 1; i < N; i++) ts.push(i / N + rr(-.28, .28) / N);              // uneven spacing: big and small flakes
     const vs = [P0];
     for (const t of ts.sort((a, b) => a - b)) {
       const bx = (1 - t) ** 2 * P0[0] + 2 * (1 - t) * t * C[0] + t * t * P3[0], by = (1 - t) ** 2 * P0[1] + 2 * (1 - t) * t * C[1] + t * t * P3[1];
-      const step = r() < .25 ? rr(2.5, 6) : 0;              // now and then a flake took a deeper bite
-      const j = rr(-2.6, 2.6);                              // jag in and out across the line
+      const step = (r() < .25 ? rr(2.5, 6) : 0) * ks;       // now and then a flake took a deeper bite
+      const j = rr(-2.6, 2.6) * ks;                         // jag in and out across the line
       vs.push([bx - step * .7 + j, by - step * .7 + j]);
     }
     vs.push(P3);
