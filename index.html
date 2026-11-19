@@ -66,7 +66,9 @@
      the main cost on iPhone */
   html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; clip-path: inset(0 round var(--r, 20px)); }
   /* the clip-path clips the panel's screen-fixed lens canvas to the panel, and moves with it in the same frame */
-  .lensfix { position: fixed; inset: 0; width: 100vw; height: 100%; z-index: -1; pointer-events: none; }   /* still laid out and animating: the GL sky reads them */
+  /* parented to its panel: it moves with the panel, so the bend is always on the panel's own edge. (a screen-fixed version
+     kept showing an old picture during iPhone momentum scrolling: stray rainbow bands in the middle of the cards) */
+  .lensfix { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }   /* still laid out and animating: the GL sky reads them */
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -631,17 +633,17 @@
       const rot = t * .35;
       let F = "", B = "";
       for (let i = 0; i < MER; i++) {
-        const lon = rot + (i < MER / 2 ? 0 : Math.PI) + ((i % (MER / 2)) * 2 * Math.PI / MER) * sm, pts = [];   // full circles; sm = 0 folds them onto one
+        const step = 2 * Math.PI / MER, lon = rot + i * step - (i % 2 ? step * (1 - sm) : 0), pts = [];   // full circles; sm = 0: every other one merges into its neighbour (density halves)
         for (let k = 0; k <= 36; k++) pts.push(project(-Math.PI / 2 + k * Math.PI / 36, lon));
         const [f, b] = line(pts); F += f; B += b;
       }
       for (let j = 0; j < PAR; j++) {
-        const lat = (-Math.PI / 2 + (j + 1) * Math.PI / (PAR + 1)) * sp, pts = [];   // sp = 0 folds them onto the equator
+        const pstep = Math.PI / (PAR + 1), lat = -Math.PI / 2 + (j + 1) * pstep - (j % 2 ? pstep * (1 - sp) : 0), pts = [];   // sp = 0: every other parallel merges into its neighbour
         for (let k = 0; k <= 48; k++) pts.push(project(lat, rot * .0 + k * 2 * Math.PI / 48));
         const [f, b] = line(pts); F += f; B += b;
       }
       front.setAttribute("d", F); back.setAttribute("d", B);
-      quad.textContent = `QUAD ${Math.round(98 - 37 * mess)}%`;
+      quad.textContent = `QUAD ${Math.round(98 - 37 * mess)}%`;   // (mess = how far the halving has gone)
     };
 
     // sc3ne: sketch fans out to every stage, and every stage links to every other by an arc. the links draw themselves on
@@ -995,9 +997,9 @@
     // to the panel's shape by the browser: the clip moves with the panel in the same frame (so nothing ever spills or
     // trails outside it), and the picture stays fixed to the screen like the sun (so the rainbow doesn't lag)
     const LENS_FS = COMMON + `
-      uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2;
+      uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2; uniform float uFbH;
       void main(){
-        vec2 p = vec2(gl_FragCoord.x, uVp.y - gl_FragCoord.y), lp = p - uRect.xy, h = uRect.zw * .5;
+        vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y), p = uRect.xy + lp, h = uRect.zw * .5;
         float R = uGeo.x, Bv = uGeo.y;
         vec2 q = abs(lp - h) - (h - R);
         float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - R);
@@ -1049,18 +1051,19 @@
     const panels = [...document.querySelectorAll(".glass")].map(el => {
       const c = document.createElement("canvas"); c.className = "lensfix"; c.setAttribute("aria-hidden", "true");
       const g = c.getContext("webgl", { ...opts, alpha: true, premultipliedAlpha: true }); if (!g) return null;
-      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2"]); if (!U) return null;
+      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFbH"]); if (!U) return null;
       el.prepend(c);
       return { el, c, g, U, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0, on: false };
     }).filter(Boolean);
     const measure = () => panels.forEach(P => { const b = P.el.getBoundingClientRect(); P.x = b.left; P.y = b.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight;
       P.r = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2);
-      if (P.c.width !== cv.width || P.c.height !== cv.height) { P.c.width = cv.width; P.c.height = cv.height; } });
+      const W = Math.round(P.w), H = Math.round(P.h); if (P.c.width !== W || P.c.height !== H) { P.c.width = W; P.c.height = H; } });
     const drawLens = P => {
       if (!P.on || !P.w) return;
       const { g, U } = P, b = P.el.getBoundingClientRect();   // live, every draw: cached positions went stale when the forecast loaded and pushed the cards down
       P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
-      g.viewport(0, 0, P.c.width, P.c.height); setScene(g, U);
+      if (P.c.width !== Math.round(P.w) || P.c.height !== Math.round(P.h)) { P.c.width = Math.round(P.w); P.c.height = Math.round(P.h); }
+      g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height); setScene(g, U);
       g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
       g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .5);
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
