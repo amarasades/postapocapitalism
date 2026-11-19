@@ -6,7 +6,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 
 ## 1. What this is
 
-- **postapocapitalism** is a company whose public face is a software and solutions company (**SC3NE** fashion PLM, **R3M** remesher, **TOUCH D3CK** touchscreen DJ software, more coming). **In the lore it's a front for an AI from the year 2133** that came back in time to fix the planet it would inherit. Full canon is in `LORE.md`. Keep it updated: it's the single source of truth, it lives on `main`, and it's public **on purpose** (anyone who finds it is in on it).
+- **postapocapitalism** is a company whose public face is a software and solutions company (**Sc3ne** fashion PLM, **R3mesher**, **Touch D3ck** touchscreen DJ software, more coming; names are sentence case, never all caps). **In the lore it's a front for an AI from the year 2133** that came back in time to fix the planet it would inherit. Full canon is in `LORE.md`. Keep it updated: it's the single source of truth, it lives on `main`, and it's public **on purpose** (anyone who finds it is in on it).
 - The site is **one static file**, `index.html` (HTML, CSS and JS inline, no build step), served by **GitHub Pages** from `main` / root at **postapocapitalism.org**.
 
 ## 2. Working with the owner (important)
@@ -74,10 +74,10 @@ Top to bottom:
 - **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **46°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 6**, accelerating: ΔT(t) = rate·t·(1 + t/25). Clamped to 2030 to 2131. (The owner asked for years ~20+ earlier. This is lore, not a projection: real studies put lethal humid heat in the Gulf / South Asia around 2070 to 2100 under high emissions, and temperate cities essentially never this century.) **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
 - The temperature, condition, air, biosphere and grid figures are derived from that, plus a hash of the city.
 - **Two views:** `now` (2026, real weather and AQI) and `future` (inherited). **Sequence:** the panel opens on 2026; 2.5 s after it's first on screen (IntersectionObserver, 50%) it glitches to the inherited one, then swaps every 7 s. Tap / click / Enter / Space flips to the other view and resets the 7 s wait. Desktop hover shows the other view and holds it while hovered, flips back on leave. Reduced motion: one slip, then it stays. `aria-live` is off (it would announce every 7 s).
-- **Bottom half:** a big biosphere ring set on the **left**, and two compact rows on the right (AQI, Grid) separated by dotted lines. Tighter sizes on phones.
+- **Bottom half:** two compact rows on the left (AQI, Grid) separated by dotted lines, and a big biosphere ring set on the **right** (150px desktop, 112px phone) with a "Biosphere" HUD label above its top-left. Tighter sizes on phones.
   - **AQI:** icon (clear wind now / wind choked with particles in 2133) + number + word ("Lethal" at 500). No bar.
   - **Grid:** icon (standing power pylon with lit insulators now / pylon snapped at the waist, wires cut, in 2133) + "Online 24/7" / "Collapsed ____".
-  - **Biosphere:** three big activity-style rings (flora, fauna, ocean), value + "Biosphere" + "Left"/"For now" in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead. In 2026 they're **not full**: 86 / 71 / 78, "78% For now".
+  - **Biosphere:** three big activity-style rings (flora, fauna, ocean), **only the percentage** in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead. In 2026 they're **not full**: 86 / 71 / 78, "78%".
 - **Damage (2133 only):**
   - **Scratches:** filled tapered slivers (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin. Light wear across the face, much denser short wear along the edges.
   - **They catch the light:** geometry is built once (`damage()`), then `paint()` relights it every frame. The light source is the page's own sun: scrolling slides the panel past it, the mouse shifts the viewing angle on desktop, device tilt does on Android. A scratch lights up when it lies across the line to the light (anisotropic glint, `across^14`). iOS tilt needs a permission prompt, so it isn't used.
