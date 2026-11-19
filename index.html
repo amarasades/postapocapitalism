@@ -1056,7 +1056,13 @@
       [U.uF0, U.uF1, U.uF2].forEach((u, i) => g.uniform4f(u, F[i][0] / 255, F[i][1] / 255, F[i][2] / 255, F[i][3]));
       g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
     };
-    const drawLenses = () => panels.forEach(drawLens);
+    // Safari's toolbars shrink / grow while you scroll, which resizes the screen. the canvases were left at their old pixel
+    // size and got stretched, so the bend sat too high or low and STAYED there. every draw now checks the real size first
+    const syncSize = () => { const r = skyEl.getBoundingClientRect();
+      if (Math.round(r.width) !== cv.width || Math.round(r.height) !== cv.height) { measureFixed(); measure(); drawSky(); } };
+    let settle = 0;
+    const drawLenses = () => { syncSize(); panels.forEach(drawLens);
+      clearTimeout(settle); settle = setTimeout(() => { syncSize(); panels.forEach(drawLens); }, 140); };   // one clean redraw after the scroll stops
     if ("IntersectionObserver" in window) { const io = new IntersectionObserver(es => es.forEach(e => { const P = panels.find(q => q.el === e.target); if (P) { P.on = e.isIntersecting; P.c.style.display = P.on ? "" : "none"; if (P.on) drawLens(P); } }), { rootMargin: "40px" }); panels.forEach(P => io.observe(P.el)); }
     else panels.forEach(P => P.on = true);
 
@@ -1067,6 +1073,8 @@
     const later = () => { if (!dirty) { dirty = true; requestAnimationFrame(flush); } };
     addEventListener("scroll", drawLenses, { passive: true });
     addEventListener("resize", () => { measureFixed(); measure(); later(); });
+    if (window.visualViewport) visualViewport.addEventListener("resize", () => { measureFixed(); measure(); later(); });
+    if ("onscrollend" in window) addEventListener("scrollend", () => drawLenses());
     if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); later(); }).observe(document.body);
     if (document.fonts) document.fonts.ready.then(() => { measure(); later(); });
     window.glSkyDirty = later;
