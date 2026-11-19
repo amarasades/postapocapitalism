@@ -68,7 +68,9 @@
   /* the clip-path clips the panel's screen-fixed lens canvas to the panel, and moves with it in the same frame */
   /* parented to its panel: it moves with the panel, so the bend is always on the panel's own edge. (a screen-fixed version
      kept showing an old picture during iPhone momentum scrolling: stray rainbow bands in the middle of the cards) */
-  .lensfix { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }   /* still laid out and animating: the GL sky reads them */
+  .lensfix { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+  .lensbg { position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 24px rgba(255,250,240,.08); }
+  html.glbg .glass.bgoff { background: none !important; box-shadow: 0 18px 44px -22px rgba(60, 20, 5, .5) !important; }   /* still laid out and animating: the GL sky reads them */
   /* VSCROLL (see the script): the page doesn't scroll natively on the WebGL-glass path; #vscroll is moved by hand */
   html.vs, html.vs body { height: 100%; overflow: hidden; overscroll-behavior: none; }
   html.vs body { position: fixed; inset: 0; touch-action: pan-x pinch-zoom; }
@@ -1109,10 +1111,12 @@
         vec3 c = bent * vec3(246.,242.,239.)/255.;                          // the page tint, which this canvas sits above
         vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uRect.z + .9397*uRect.w) + .5;
         vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
-        c = mix(c, f.rgb, f.a);                                              // the panel's own tint (this canvas sits above it too)
+        c = mix(c, f.rgb, f.a);   // (fill uniforms are zero now: the panel's real background is a layer above this canvas)
         // the whole bevel, no contrast gate (that gate let the unbent sun edge show through). the bend itself goes to zero
         // at the inner end, so it meets the real thing with no seam
-        float a = 1. - smoothstep(Bv * .7, Bv, dd);
+        // full strength through the whole bevel: the bend reaches exactly zero at its inner end, and only THEN hands over
+        // to the real sky (fading earlier left a few px of bend showing as a notch in the sun on big panels)
+        float a = 1. - smoothstep(Bv - 1.5, Bv, dd);
         // the nav floats over page text we can't redraw: there the edge stays see-through except where the bend visibly
         // changes the sky (the sun's rim), so the text under it never disappears behind a band
         if (uSee > 0.) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.015, .09, max(dc.r, max(dc.g, dc.b))); }
@@ -1155,6 +1159,14 @@
       [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]].forEach(([k, v]) => g.texParameteri(g.TEXTURE_2D, k, v));
       g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 1, 1, 0, g.RGBA, g.UNSIGNED_BYTE, new Uint8Array(4)); g.uniform1i(U.uOrb, 0);
       el.prepend(c);
+      // the panel's own background (and inner glow) moved onto a layer just above the lens, so whatever it is (glass, the
+      // darker .bar, the forecast's two timelines) it sits on the bent edge exactly as it sits on the clear middle
+      const bg = document.createElement("div"); bg.className = "lensbg"; bg.setAttribute("aria-hidden", "true"); c.after(bg);
+      let mo = null;
+      const syncBg = () => { el.classList.remove("bgoff"); const cs = getComputedStyle(el);   // longhands: Safari returns "" for the shorthand
+        bg.style.backgroundColor = cs.backgroundColor; bg.style.backgroundImage = cs.backgroundImage; el.classList.add("bgoff");
+        if (mo) mo.takeRecords(); };   // ignore our own class toggle, or this would loop
+      syncBg(); mo = new MutationObserver(syncBg); mo.observe(el, { attributes: true, attributeFilter: ["class"] });
       return { el, c, g, U, moves: !!el.closest(".nav"), x: 0, y: 0, w: 0, h: 0, r: 0, on: false };
     }).filter(Boolean);
     const measure = () => panels.forEach(P => { const b = P.el.getBoundingClientRect(); P.x = b.left; P.y = b.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight;
@@ -1170,8 +1182,7 @@
       g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
       g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
-      const F = P.el === tele ? (mode === "now" ? FILL.now : FILL.tele) : FILL.glass;
-      [U.uF0, U.uF1, U.uF2].forEach((u, i) => g.uniform4f(u, F[i][0] / 255, F[i][1] / 255, F[i][2] / 255, F[i][3]));
+      [U.uF0, U.uF1, U.uF2].forEach(u => g.uniform4f(u, 0, 0, 0, 0));
       g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
     };
     // Safari's toolbars shrink / grow while you scroll, which resizes the screen. the canvases were left at their old pixel
