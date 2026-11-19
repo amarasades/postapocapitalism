@@ -66,7 +66,10 @@
   .glass::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
     background: var(--rim, none) center / 100% 100% no-repeat; }
   .glsky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -4; pointer-events: none; }
-  html.glbg .sky, html.glbg .sun, html.glbg .smoke { visibility: hidden; }   /* still laid out and animating: the GL sky reads them */
+  html.glbg .sky, html.glbg .sun, html.glbg .smoke { visibility: hidden; }
+  /* on the GL path the glass doesn't blur the backdrop: re-blurring 7 panels over a canvas that changes every frame was
+     the main cost on iPhone. the 1.04 brightening is done in the shader instead */
+  html.glbg .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }   /* still laid out and animating: the GL sky reads them */
   .glass::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .2; mix-blend-mode: soft-light;
     background: linear-gradient(to top, rgba(120, 70, 30, .18), transparent 30%); }
   /* the telemetry needs a little more body to stay readable over the orrery */
@@ -934,6 +937,9 @@
       }
       void main(){
         vec2 p = vec2(gl_FragCoord.x, uVp.y * uQ - gl_FragCoord.y) / uQ;
+        // the loop only finds which panel (if any) this pixel is in; the scene is evaluated once, after it
+        // (evaluating it inside the loop got unrolled 8× into a huge shader that compiled very slowly)
+        float inGlass = 0., edge = 0.; vec2 off = vec2(0.);
         for (int i = 0; i < ${N}; i++) {
           if (i >= uN) break;
           vec4 R = uP[i], G = uG[i];
@@ -941,17 +947,22 @@
           if (lp.x < -1. || lp.y < -1. || lp.x > R.z + 1. || lp.y > R.w + 1.) continue;
           vec2 q = abs(lp - h) - (h - G.x);
           float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - G.x);
-          if (dd < 0. || dd > G.y) continue;
+          if (dd < 0.) continue;
           if (uC[i].z > 0. && lp.x > uC[i].x && lp.y > uC[i].y) continue;     // the chip: no glass there
-          vec2 g = max(abs(lp - h) - (h - max(G.x, G.y + 1.)), 0.) * sign(lp - h);
-          if (length(g) == 0.) continue;
-          vec2 n = normalize(g);
-          float t = 1. - clamp(dd / G.y, 0., 1.), m = t*t*(3. - 2.*t)*t;
-          vec2 off = -n * m * G.z;
-          gl_FragColor = vec4(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b, 1.);
-          return;
+          inGlass = 1.;
+          if (dd <= G.y) {
+            vec2 g = max(abs(lp - h) - (h - max(G.x, G.y + 1.)), 0.) * sign(lp - h);
+            if (length(g) > 0.) {
+              float t = 1. - clamp(dd / G.y, 0., 1.), m = t*t*(3. - 2.*t)*t;
+              off = -normalize(g) * m * G.z;
+              edge = smoothstep(0., 2., dd);   // 1 px per css px: ease the bend in over the outer 2px, no stair-steps
+            }
+          }
+          break;
         }
-        gl_FragColor = vec4(scene(p), 1.);
+        vec3 c = scene(p);
+        if (edge > 0.) c = mix(c, vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b), edge);
+        gl_FragColor = vec4(c * (1. + .04 * inGlass), 1.);   // the glass's own 1.04 brightening
       }`;
     const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.warn(gl.getShaderInfoLog(o)); return o; };
     const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
@@ -966,10 +977,10 @@
     document.documentElement.classList.add("glbg");
     // smoke: same geometry and timing as the CSS (positions read from the running CSS animations, so they stay in sync)
     const SMOKE = [{ top: .10, left: -.30, w: 70, h: 30, dur: 70, delay: 0 }, { top: .38, left: -.40, w: 60, h: 24, dur: 95, delay: -40 }, { top: .66, left: -.50, w: 80, h: 28, dur: 120, delay: -70 }];
-    const t0 = performance.now();
+    // the CSS animation clocks are read once (reading them every frame forced a style recalc), then advanced by time
+    const t0 = performance.now(), base = blobs.map(el => { const a = el.getAnimations ? el.getAnimations()[0] : null; return a && a.currentTime != null ? +a.currentTime : 0; });
     const blobAt = (i, vw, vh) => {
-      const b = SMOKE[i], a = blobs[i].getAnimations ? blobs[i].getAnimations()[0] : null;
-      const ms = a && a.currentTime != null ? a.currentTime : performance.now() - t0;
+      const b = SMOKE[i], ms = base[i] + (performance.now() - t0);
       const prog = (((ms / 1000 - b.delay) % b.dur) + b.dur) % b.dur / b.dur;
       const W = vw * 1.2, H = vh * 1.2, x = -.1 * vw + b.left * W + prog * 1.7 * vw, y = -.1 * vh + b.top * H;
       const hw = b.w / 100 * vw / 2, hh = b.h / 100 * vh / 2;
@@ -980,7 +991,7 @@
     const measure = () => panels.forEach(P => { const b = P.el.getBoundingClientRect(); P.x = b.left; P.y = b.top + scrollY; P.w = P.el.offsetWidth; P.h = P.el.offsetHeight;
       P.r = Math.min(parseFloat(getComputedStyle(P.el).borderTopLeftRadius) || 0, P.w / 2, P.h / 2); });
     let vw = 0, vh = 0, q = 1, sunR = [0, 0, 0];
-    const size = () => { const r = sky.getBoundingClientRect(); vw = r.width; vh = r.height; q = Math.min(devicePixelRatio || 1, 1.5);
+    const size = () => { const r = sky.getBoundingClientRect(); vw = r.width; vh = r.height; q = 1;   // soft gradients: 1 px per css px is plenty, and 1/9 of the work on a 3x iPhone
       cv.width = Math.round(vw * q); cv.height = Math.round(vh * q); const s = sun.getBoundingClientRect(); sunR = [s.left + s.width / 2, s.top + s.height / 2, s.width]; measure(); };
     size();
     const P4 = new Float32Array(N * 4), G4 = new Float32Array(N * 4), C4 = new Float32Array(N * 4);
@@ -1004,7 +1015,7 @@
     }
     // smoke drifts slowly: ~20 fps is plenty when nothing moves; scrolling draws straight from the scroll event
     let last = 0, dirty = true;
-    const loop = now => { if (dirty || now - last > 50) { draw(); last = now; dirty = false; } requestAnimationFrame(loop); };
+    const loop = now => { if (dirty || now - last > 66) { draw(); last = now; dirty = false; } requestAnimationFrame(loop); };   // ~15 fps idle
     addEventListener("scroll", () => { draw(); last = performance.now(); }, { passive: true });
     addEventListener("resize", () => { size(); dirty = true; });
     if ("ResizeObserver" in window) new ResizeObserver(() => { measure(); dirty = true; }).observe(document.body);
@@ -1023,7 +1034,7 @@
   function damage() {
     const dpr = Math.min(devicePixelRatio || 1, 2), w = tele.clientWidth, h = tele.clientHeight;
     if (!w || !h) return;
-    cw = w; chh = h; cv.width = w * dpr; cv.height = h * dpr;
+    cw = w; chh = h; cv.width = w * dpr; cv.height = h * dpr; lastL = [1e9, 1e9, 0];
     cctx = cv.getContext("2d"); cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let seed = 2133; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const rr = (a, b) => a + r() * (b - a);
@@ -1144,6 +1155,8 @@
     if (view.px != null) { lx += (view.px - innerWidth / 2) * -.9; ly += (view.py - innerHeight / 2) * -.9; }
     lx += view.tx * 18; ly += view.ty * 18;
     lx -= tr.left; ly -= tr.top;
+    if (Math.abs(lx - lastL[0]) < 2.5 && Math.abs(ly - lastL[1]) < 2.5 && lastL[2] === cw) return;   // the light hasn't moved enough to change a glint
+    lastL = [lx, ly, cw];
     const c = cctx, R2 = (Math.max(cw, chh) * 1.4) ** 2;
     c.clearRect(0, 0, cw, chh);
     for (const s of wear) {
@@ -1162,7 +1175,7 @@
       c.fill(f.lit);
     }
   }
-  let painting = false;
+  let painting = false, lastL = [1e9, 1e9, 0];
   const repaint = () => { if (!painting) { painting = true; requestAnimationFrame(() => { painting = false; paint(); }); } };
   addEventListener("scroll", repaint, { passive: true });
   addEventListener("pointermove", e => { if (e.pointerType === "mouse") { view.px = e.clientX; view.py = e.clientY; repaint(); } }, { passive: true });
@@ -1202,6 +1215,15 @@
     const skyL = t => { t = Math.min(1, Math.max(0, t)); let i = 1; while (i < stops.length - 1 && t > stops[i][0]) i++;
       const [t0, a] = stops[i - 1], [t1, b] = stops[i], f = (t - t0) / (t1 - t0), c = a.map((v, j) => v + (b[j] - v) * f);
       return .2126 * lin(c[0]) + .7152 * lin(c[1]) + .0722 * lin(c[2]); };
+    // the two ends of the glow are rendered once: the word itself carries the dark-sky glow (k = 0), an identical copy on top
+    // carries the pale-sky glow (k = 1), and scrolling only changes that copy's opacity. an opacity change is done by the
+    // compositor; rewriting text-shadow on 24vw text every scroll frame was a full repaint each time (lag on iPhone)
+    const shadow = k => { const f = n => n.toFixed(3), b = 1 + .05 * (1 - k);   // the dark side gets 5% more; the pale side is right as it is
+      return `0 0 ${f(10 + 6 * k)}px rgba(255,250,240,${f((.12 + .6 * k) * b)}), 0 0 40px rgba(255,232,194,${f(Math.min(1, (.56 + .34 * k) * b))}), 0 0 ${f(80 + 30 * k)}px rgba(255,214,160,${f((.1 + .48 * k) * b)})`; };
+    word.style.position = "relative"; word.style.textShadow = shadow(0); word.style.color = "rgb(255,243,224)";
+    const hi = document.createElement("span"); hi.textContent = word.textContent; hi.setAttribute("aria-hidden", "true");
+    hi.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;opacity:0;will-change:opacity;color:rgb(255,250,242);text-shadow:${shadow(1)}`;
+    word.appendChild(hi);
     let ticking = false, lastK = -1;
     const update = () => {
       ticking = false;
@@ -1209,11 +1231,7 @@
       const L = skyL((r.top + r.height * .55) / innerHeight);
       const k = Math.min(1, Math.max(0, (L - .14) / (.42 - .14))); // 0 over the dark orange, 1 over the pale haze
       if (Math.abs(k - lastK) < .01) return; lastK = k;
-      const f = n => n.toFixed(3);
-      // k = 0 is the original 40px glow, about 5% brighter; toward k = 1 a tight white core and a wide warm bloom come in
-      const b = 1 + .05 * (1 - k);   // the dark side gets 5% more; the pale side is right as it is
-      word.style.textShadow = `0 0 ${f(10 + 6 * k)}px rgba(255,250,240,${f((.12 + .6 * k) * b)}), 0 0 40px rgba(255,232,194,${f(Math.min(1, (.56 + .34 * k) * b))}), 0 0 ${f(80 + 30 * k)}px rgba(255,214,160,${f((.1 + .48 * k) * b)})`;
-      word.style.color = `rgb(255,${Math.round(243 + 7 * k)},${Math.round(224 + 18 * k)})`;
+      hi.style.opacity = k.toFixed(3);
     };
     const queue = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
     addEventListener("scroll", queue, { passive: true }); addEventListener("resize", queue);
