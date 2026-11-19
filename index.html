@@ -363,7 +363,7 @@
           <div class="bar hud"><span class="id">MOD.01</span><span class="sp"></span><span><i class="dot"></i>In development</span></div>
           <div class="viz" aria-hidden="true">
             <svg viewBox="0 0 300 160" fill="none" stroke="#1a120d" id="viz-plm">
-              <line x1="90" y1="112" x2="280" y2="112" stroke-opacity=".3"/>
+              <line x1="20" y1="112" x2="280" y2="112" stroke-opacity=".3"/>
               <g class="plm-curves"></g><g class="plm-arcs"></g><g class="plm-pulses" fill="#fff3e0" stroke="none"></g>
               <circle cx="40" cy="36" r="4.5" fill="#fff3e0" stroke="none"/>
               <g fill="#f0c48e" stroke="none"><circle cx="110" cy="112" r="5"/><circle cx="180" cy="112" r="5"/><circle cx="250" cy="112" r="5"/></g>
@@ -995,7 +995,9 @@
         vec2 off = -normalize(g) * m * uGeo.z;
         vec3 straight = scene(p), bent = vec3(scene(p + off * 1.32).r, scene(p + off).g, scene(p + off * .68).b);
         vec3 dc = abs(bent - straight);
-        float vis = smoothstep(.01, .06, max(dc.r, max(dc.g, dc.b)));   // only where the bend changes something
+        // only where the bend has real contrast to work with (the sun's edge). a bent sky gradient changes the colour a
+        // little too, and a late frame of THAT showed as a band inside the cards; now nothing is drawn there at all
+        float vis = smoothstep(.07, .16, max(dc.r, max(dc.g, dc.b)));
         vec3 c = bent * vec3(246.,242.,239.)/255.;                          // the page tint, which this canvas sits above
         vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uRect.z + .9397*uRect.w) + .5;
         vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
