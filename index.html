@@ -766,6 +766,14 @@
     build(); tele.classList.remove("resolving"); render(); requestAnimationFrame(() => damage()); startCycle();
   }
 
+  /* the outward direction of a rounded rectangle's edge, blended smoothly through the corners: the gradient of a distance
+     field whose inner corners are softened. the plain version flips from "bottom" to "right" along a diagonal, which tore
+     the bent image into a visible crease (seen on an iPhone) */
+  // direction from the nearest point of a rectangle inset by S (≥ the bevel): continuous everywhere the bevel is
+  const rrN = (px, py, cx, cy, halfW, halfH, S) => { const ax = Math.abs(px - cx) - (halfW - S), ay = Math.abs(py - cy) - (halfH - S);
+    const gx = Math.max(ax, 0) * Math.sign(px - cx), gy = Math.max(ay, 0) * Math.sign(py - cy), L = Math.hypot(gx, gy);
+    return L ? [gx / L, gy / L] : [0, 0]; };
+
   /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
   const LG = (() => {
     const ua = navigator.userAgent;
@@ -788,9 +796,8 @@
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const px = x + .5, py = y + .5, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
         let d, nx, ny;
-        if (qx > 0 && qy > 0) { const L = Math.hypot(qx, qy) || 1; d = r - L; nx = qx / L * Math.sign(px - cx); ny = qy / L * Math.sign(py - cy); }
-        else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
-        else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
+        d = r - (qx > 0 && qy > 0 ? Math.hypot(qx, qy) : Math.max(qx, qy));
+        [nx, ny] = rrN(px, py, cx, cy, w / 2, h / 2, Math.max(r, B + 1));
         if (bb && px > bb[0] && px < bb[2] && py > bb[1] && py < bb[3]) {
           if (inside(px, py)) { d = 1e9; }
           else for (const [[ax, ay], [bx, by]] of segs) {
@@ -860,9 +867,9 @@
       for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
         const px = (X + .5) / k, py = (Y + .5) / k, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
         let d, nx, ny;
-        if (qx > 0 && qy > 0) { const l = Math.hypot(qx, qy) || 1; d = r - l; nx = qx / l * Math.sign(px - cx); ny = qy / l * Math.sign(py - cy); }
-        else if (qx > qy) { d = r - qx; nx = Math.sign(px - cx); ny = 0; }
-        else { d = r - qy; nx = 0; ny = Math.sign(py - cy); }
+        d = r - (qx > 0 && qy > 0 ? Math.hypot(qx, qy) : Math.max(qx, qy));
+        if (d > 18) continue;
+        [nx, ny] = rrN(px, py, cx, cy, w / 2, h / 2, Math.max(r, 19));
         if (d > 18) continue;
         const f = nx * L[0] + ny * L[1], lit = f > 0 ? f ** 1.6 : 0, back = f < 0 ? (-f) ** 2.2 * .42 : 0, g = lit + back + .05;
         // the prism: each colour comes off the bevel at a slightly different depth
@@ -908,7 +915,7 @@
         vec2 h = uSize * .5, q = abs(lp - h) - (h - uR);
         float d = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - uR);
         if (d < -1. || d > uB) { gl_FragColor = vec4(0.); return; }
-        vec2 s = sign(lp - h), n = (q.x > 0. && q.y > 0.) ? normalize(q) * s : (q.x > q.y ? vec2(s.x, 0.) : vec2(0., s.y));
+        vec2 g = max(abs(lp - h) - (h - max(uR, uB + 1.)), 0.) * sign(lp - h), n = length(g) > 0. ? normalize(g) : vec2(0.);
         float t = 1. - clamp(d / uB, 0., 1.), m = t * t * (3. - 2. * t) * t;
         vec2 p = uOrigin + lp, off = -n * m * uScale;
         vec3 col = vec3(bg(p + off * 1.25).r, bg(p + off).g, bg(p + off * .75).b) * 1.04;
