@@ -65,7 +65,10 @@ Top to bottom:
    - **One-line copy.**
    - **`.orbit`:** a live solar system. It **rises from the bottom-right corner of the first screen** (`placeOrrery()`), so only part of it shows on load.
    - **Phones:** the first screen is just the headline, sun and solar system. The forecast comes after scrolling.
-4. **`#modules`:** product cards. Each has a header bar, an animated mini-diagram, a small kind label and the name. (The "Cancels: ___" lines were removed by the owner.)
+4. **`#modules`:** product cards. Each has a header bar, an animated mini-diagram, a small kind label and the name. (The "Cancels: ___" lines and the hero's "Scroll" hint were removed by the owner.) **Thumbnails animate on phones whenever on screen, on desktop only while hovered** (`.mod.on`; one rAF loop, reduced motion = still):
+   - **Sc3ne:** the sketch fans out to every stage on flowing dashed curves; every stage links to every other by arcs **above** the line that draw on in sequence with a travelling pulse, then fade; the ring steps through the stages.
+   - **R3mesher:** a turning, tilted globe with 8 meridians + 7 parallels. It "breathes" between scan and remeshed: the lines drift off even spacing, then snap back into a clean grid; QUAD % follows (61–98%).
+   - **Touch D3ck:** two waves between the decks (one fast and tight, one slow, wide, out of phase); platters turn only while live. No BPM label.
 5. **`#transmission`:** a paper section with a procedurally melted "pa" stamp. It's weak; it needs a hand-drawn SVG.
 6. **`#log`:** data-log rows.
 7. **Footer:** status bar and credits (GeoJS and Open-Meteo attribution is required).
@@ -99,7 +102,7 @@ Top to bottom:
 - **Lens (Chromium):** real backdrop refraction, bevel band 14–34px, displacement scale 40–110px, R ×1.4 / G ×1 / B ×.6 (strong, live aberration), blur .35.
 - **GL SKY + LENSFIX (Safari, every iPhone browser, Firefox; wherever LG is off):**
   1. `canvas.glsky`: fixed full-screen WebGL, sky + sun only, static (drawn once / on resize).
-  2. `canvas.lensfix` **inside each `.glass`**: `position: fixed` full-viewport WebGL canvas that draws only that panel's bend (R ×1.32 / G ×1 / B ×.68 **saturated rainbow — owner loves it**), only where it visibly changes something, with the page tint and the panel tint applied. The panel has `clip-path: inset(0 round r)` (tele: the chip path / inset), which clips its fixed descendant **in the same frame as the panel moves**: the bend can't spill or trail outside the panel ("parented"), and its picture stays screen-fixed like the sun, so the rainbow doesn't lag. Only on-screen panels draw (IntersectionObserver). Redrawn from the scroll event.
+  2. `canvas.lensfix` **inside each `.glass`**: `position: fixed` full-viewport WebGL canvas that draws only that panel's bend (R ×1.32 / G ×1 / B ×.68 **saturated rainbow — owner loves it**), only where it visibly changes something, with the page tint and the panel tint applied. The panel has `clip-path: inset(0 round r)` (tele: the chip path / inset), which clips its fixed descendant **in the same frame as the panel moves**: the bend can't spill or trail outside the panel ("parented"), and its picture stays screen-fixed like the sun, so the rainbow doesn't lag. Only on-screen panels draw (IntersectionObserver). Redrawn from the scroll event, reading each panel's **live** `getBoundingClientRect()` every draw (cached positions went stale when the forecast loaded and pushed the cards down: bend bands drawn in the wrong place inside the cards).
   - **History, don't repeat:** guessed-sky redraw → grey bands; fullscreen canvas brightening the glass → trailing box + chip square; canvas scrolling with the panel → rainbow lagged; bend drawn on the fixed sky canvas → light/dark bend patches lagged behind and spilled past their panel. Glass does **no backdrop blur** here. Preview with **`?glass=gl`**; plain fallback **`?glass=plain`**.
 - **Frost is minimal:** `.glass` fill .06/.01/.03, fallback blur 3px; `.tele` .19/.07/.1; `.tele.now` .38/.14/.06.
 - Filters are rebuilt on resize. New ones are created *before* the old ones are removed, to avoid a flash.
