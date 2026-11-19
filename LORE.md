@@ -46,9 +46,9 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 
 | Product | What it does | What it fights |
 |---|---|---|
-| **Fashion PLM** | Product lifecycle management for fashion, from sketch to production run. | Fashion waste and overproduction. |
-| **Remesher** | Turns messy scans and sculpts into clean, usable topology. | A culture of discarding; it supports making and repairing. |
-| **Touch Deck** | Touchscreen-first DJ software. | Culture dying out; it keeps culture alive. |
+| **SC3NE** (fashion PLM) | Product lifecycle management for fashion, from sketch to production run. | Fashion waste and overproduction. |
+| **R3M** (remesher: "re-mesher", the 3 is the E) | Turns messy scans and sculpts into clean, usable topology. | A culture of discarding; it supports making and repairing. |
+| **TOUCH D3CK** (touchscreen DJ) | Touchscreen-first DJ software. | Culture dying out; it keeps culture alive. |
 | *More incoming* | | |
 
 **Rule for new products:** each one has to answer *"what part of the dead future does this cancel?"* If it can't, it doesn't fit.
@@ -83,15 +83,15 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 
 ### Telemetry: how it works (canon, built)
 - **Origin: 2133.** Fixed, shown at the top of the site. It's the year the AI comes from.
-- **The panel's year is the visitor's own: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050) **× 5 runaway**, and that rate **keeps accelerating** (feedbacks: it grows by its own size every 60 years). It's the place's year, never the origin year: it lands somewhere between the 2030s and the 2120s, and is never shown as 2133. Hot places get early years and cool ones late. *(Simulated: Phoenix about 2045, Madrid 2052, Paris 2064, London 2075 to 2082, Reykjavik 2110.)*
+- **The panel's year is the visitor's own: "Unlivable by ____".** It's the year that location's summer peak crosses **46°C**, at warming = the real modelled rate (Open-Meteo, EC_Earth3P_HR model, 2025 to 2050) **× 6 runaway**, and that rate **keeps accelerating** (feedbacks: it grows by its own size every 25 years). It's the place's year, never the origin year: 2030 at the earliest, never 2133. Hot places get early years and cool ones late. *(Simulated: Phoenix, Delhi, Dubai 2030 to 2031, Madrid ~2041, Paris ~2049, London ~2057, Reykjavik ~2078.)* The inherited timeline runs far ahead of real projections on purpose: that's what "inherited" means.
 - **Panel layout (weather app):** top row: "Forecast // inherited" (or "// current") on the left, and on the right a year that **shifts** between the unlivable year and today (the digits scramble, then land; no slider). The city, "Unlivable by ____" and the condition on the left. A big thin temperature with an icon on the right. Stat rows:
-  - **Left, two compact rows:** **AQI** (clear wind icon, "38 Good" / particle-choked wind, "500 Lethal") and **Grid** (a standing power pylon with lit insulators, "Online 24/7" / the pylon snapped at the waist with its wires cut, "Collapsed ____").
-  - **Right, one big ring set: Biosphere.** Three activity-style rings (flora, fauna, ocean). In 2133 they're dark red slivers ("2% Left"); in 2026 they're full and coloured ("Intact, for now").
+  - **Right, two compact rows:** **AQI** (clear wind icon, "38 Good" / particle-choked wind, "500 Lethal") and **Grid** (a standing power pylon with lit insulators, "Online 24/7" / the pylon snapped at the waist with its wires cut, "Collapsed ____").
+  - **Left, one big ring set: Biosphere.** Three activity-style rings (flora, fauna, ocean). In 2133 they're dark red slivers ("2% Left"); in 2026 they're coloured but already not full ("78%, for now").
 - **The 2133-side glass is damaged:** wear scratches (thin, tapered, broken hairlines mostly along two wiping directions, clusters of tiny nicks, a few deeper ones, and much denser short wear along the edges where it was handled) and a chip knocked out of the bottom-right corner (actually cut away), its edge broken into small flake facets. **The scratches and the chip catch the light of the site's sun**: as you scroll past it, move the mouse or tilt the phone, different scratches glint. **The 2026 side is clean and whole.**
 - **The hero background is the solar system, live** (decided: option 2 below). The planets are drawn at their **real positions right now**, worked out in the browser from JPL's approximate orbital elements (no API). There's a degree ring, and the Earth has a pulse ring and a live Moon. **Dashed ghosts mark where every planet will be on this same date in 2133**: Earth's ghost lands almost exactly on top of itself (same place, different world), and the outer planets drift along dotted arcs. It **rises from the bottom-right corner of the first screen**: on load you only see part of it (Sun near the bottom-right edge, inner planets visible, outer orbits sweeping up behind the forecast).
 - **Glass is real liquid glass** (Chromium browsers): an SVG displacement map refracts the background at every curved edge like a lens, with a slight colour split (red, green and blue bent by different amounts) and only light blur, plus a specular rim. The chip in the 2133 panel is built into the same map, so the broken edge refracts too. Safari and Firefox get clear glass with a light blur.
 - **On phones,** the first screen is just "We create futures." with the sun and the orbit diagram. The forecast panel comes after you scroll.
-- **Hover or tap glitches between the two timelines.** 2026 shows the real weather, AQI, "Intact, for now", "Online". Footer: "This is the one you can still change."
+- **The panel opens on today (2026), then the signal slips to the inherited timeline 2.5 seconds later and keeps swapping every 7 seconds.** Tap, click or hover to compare at any time. 2026 shows the real weather, AQI, "78%, for now", "Online". Footer: "This is the one you can still change."
 - If the location can't be found: "Signal lost", and everything is redacted (████).
 - The AI's humour shows up in small notes: "Est. later", `console.log("hello from later.")`.
 

@@ -38,11 +38,12 @@ const IDS = ["t-year", "t-city", "t-sub", "t-temp", "t-cond", "t-aqi", "t-aqi-s"
       });
       await page.goto(PAGE); await page.waitForTimeout(1800);
       const read = () => page.evaluate(ids => ids.map(i => document.getElementById(i)?.textContent).join(" | "), IDS);
-      console.log(`${name} ${vp} 2133: ${await read()}`);
+      const md = () => page.evaluate(() => document.getElementById("tele").classList.contains("now") ? "2026" : "inherited");
+      console.log(`${name} ${vp} ${await md()}: ${await read()}`); // the panel opens on 2026, then slips to the inherited one
       await page.screenshot({ path: path.join(OUT, `${name}-${vp}.png`) });
       if (mobile) await page.tap("#tele"); else await page.hover("#tele");
       await page.waitForTimeout(500);
-      console.log(`${name} ${vp} now : ${await read()}`);
+      console.log(`${name} ${vp} ${await md()} (after hover/tap): ${await read()}`);
       await page.locator("#tele").screenshot({ path: path.join(OUT, `${name}-${vp}-panel-now.png`) });
       const sw = await page.evaluate(() => document.documentElement.scrollWidth);
       if (sw > width) console.log(`  ! horizontal scroll: ${sw}px > ${width}px`);

@@ -51,8 +51,9 @@
   .edge { position: fixed; left: 0; right: 0; height: 2px; z-index: -4; }
   .edge.t { top: 0; background-color: var(--sky-1); }
   .edge.b { bottom: 0; background-color: var(--haze); }
-  body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5; mix-blend-mode: multiply; /* behind the content, never on top of it */
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .15 0 0 0 0 .05 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  /* no grain any more (the owner asked). the grain used to darken everything behind it by ~4% red, 5% green, 6% blue,
+     which is part of the colour they approved, so this flat multiply keeps exactly that tint, without the noise */
+  body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; mix-blend-mode: multiply; background: rgb(246, 242, 239); }
 
   /* ---------- weathered glass ---------- */
   .glass { position: relative; overflow: hidden; border-radius: var(--r, 20px);
@@ -97,6 +98,7 @@
   .hero-foot { margin-top: 36px; display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; }
   .hero-foot p { font-size: 18px; color: var(--ink-soft); }
   @media (min-width: 641px) { .hero-foot p { white-space: nowrap; } }
+  @media (min-width: 901px) { .hero-foot p { padding-left: 12px; } }
   .scroll { color: var(--ink-dim); display: flex; align-items: center; gap: 10px; }
   .scroll i { width: 1px; height: 34px; background: linear-gradient(var(--ink), transparent); animation: blink 2s infinite; }
 
@@ -128,7 +130,7 @@
   .deg { font: 300 clamp(72px, 6.6vw, 96px)/.9 var(--sans); letter-spacing: -.06em; }
   .deg sup { font-size: .42em; vertical-align: .95em; margin-left: 2px; letter-spacing: 0; }
   /* bottom half: two compact rows on the left (air, grid), the biosphere as one big ring set on the right */
-  .stats { margin: 12px 20px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: center; padding-bottom: 12px; }
+  .stats { margin: 12px 20px 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; padding-bottom: 12px; }
   .stat-col { display: flex; flex-direction: column; }
   .stat { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr); align-items: center; gap: 10px; padding: 13px 0; border-top: 1px dotted var(--ink-line); }
   .stat .k { color: var(--ink-dim); font-size: 10px; }
@@ -176,6 +178,7 @@
   .viz { height: 160px; border-bottom: 1px solid var(--ink-line); }
   .viz svg { width: 100%; height: 100%; display: block; }
   .mod-body { padding: 20px 18px 22px; display: flex; flex-direction: column; flex: 1; }
+  .mod .kind { display: block; color: var(--ink-dim); font-size: 10px; margin-bottom: 6px; }
   .mod h3 { font-weight: 700; font-size: 28px; letter-spacing: -.035em; line-height: 1; margin-bottom: 10px; }
   .mod p { color: var(--ink-soft); font-size: 15px; }
   .cancels { margin-top: auto; padding-top: 18px; color: var(--ink-dim); }
@@ -231,7 +234,13 @@
     .log .row .msg { grid-column: 1 / -1; }
     .log .row .end { display: none; }
     .sun { right: -6vw; top: 12vh; }
-    .hero-meta { margin-bottom: 71px; } /* the info row lost its second line (UTC, Sun–Earth): keep "futures." where it was */
+    .hero-meta { margin-bottom: 71px; }
+    .stats { gap: 14px; }
+    .bio { width: 92px; height: 92px; }
+    .bio-v b { font-size: 15px; } .bio-v .hud { font-size: 7px; }
+    .stat { grid-template-columns: 22px 30px minmax(0, 1fr); gap: 8px; }
+    .sico { width: 22px; height: 22px; }
+    .stat .v b { font-size: 16px; margin-right: 4px; } /* the info row lost its second line (UTC, Sun–Earth): keep "futures." where it was */
   }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
@@ -295,7 +304,7 @@
     <div class="hero-grid">
       <h1><span>We</span><span>create</span><span>futures.</span></h1>
 
-      <aside class="tele glass resolving" id="tele" tabindex="0" aria-live="polite" aria-label="Forecast for your location: the year it stops being livable, and today. Hover or tap to compare.">
+      <aside class="tele glass resolving" id="tele" tabindex="0" aria-live="off" aria-label="Forecast for your location: today, and the year it stops being livable. It swaps between them by itself; hover, tap or press Enter to compare.">
         <canvas class="scratches" aria-hidden="true"></canvas>
         <div class="tele-top">
           <span class="hud" id="t-mode">Forecast // inherited</span>
@@ -313,10 +322,6 @@
           </div>
         </div>
         <div class="stats">
-          <div class="stat-col">
-            <div class="stat"><span class="sico" id="t-aqi-ico" aria-hidden="true"></span><span class="k hud">AQI</span><span class="v"><b class="hot" id="t-aqi">··</b><span id="t-aqi-s"></span></span></div>
-            <div class="stat"><span class="sico" id="t-grid-ico" aria-hidden="true"></span><span class="k hud">Grid</span><span class="v"><b id="t-grid">··</b><span id="t-grid-s"></span></span></div>
-          </div>
           <div class="bio" aria-hidden="true">
             <svg viewBox="0 0 100 100" fill="none" stroke-width="6" stroke-linecap="round">
               <circle class="track" cx="50" cy="50" r="46"/><circle class="track" cx="50" cy="50" r="38.5"/><circle class="track" cx="50" cy="50" r="31"/>
@@ -325,6 +330,10 @@
               <circle class="fill" id="t-r3" cx="50" cy="50" r="31" pathLength="100" stroke="#3f6f8f" stroke-dasharray="0 100"/>
             </svg>
             <div class="bio-v"><b id="t-bio">··</b><span class="hud">Biosphere</span><span class="hud" id="t-bio-s"></span></div>
+          </div>
+          <div class="stat-col">
+            <div class="stat"><span class="sico" id="t-aqi-ico" aria-hidden="true"></span><span class="k hud">AQI</span><span class="v"><b class="hot" id="t-aqi">··</b><span id="t-aqi-s"></span></span></div>
+            <div class="stat"><span class="sico" id="t-grid-ico" aria-hidden="true"></span><span class="k hud">Grid</span><span class="v"><b id="t-grid">··</b><span id="t-grid-s"></span></span></div>
           </div>
         </div>
         <div class="tele-foot hud"><span id="t-hint">Hover to compare</span><span id="t-note"></span></div>
@@ -363,7 +372,7 @@
             </svg>
           </div>
           <div class="mod-body">
-            <h3>Fashion PLM</h3>
+            <span class="kind hud">Fashion PLM</span><h3>SC3NE</h3>
             <p>Track a garment from first sketch to production run, without a six-figure enterprise contract.</p>
             <div class="cancels hud">Cancels: <b>fashion waste</b></div>
           </div>
@@ -388,7 +397,7 @@
             </svg>
           </div>
           <div class="mod-body">
-            <h3>Remesher</h3>
+            <span class="kind hud">Remesher</span><h3>R3M</h3>
             <p>Turn messy scans and sculpts into clean, usable topology, so things get made and repaired instead of binned.</p>
             <div class="cancels hud">Cancels: <b>throwaway culture</b></div>
           </div>
@@ -409,7 +418,7 @@
             </svg>
           </div>
           <div class="mod-body">
-            <h3>Touch Deck</h3>
+            <span class="kind hud">Touchscreen DJ</span><h3>TOUCH D3CK</h3>
             <p>DJ software built for the touchscreen first, not a laptop layout squeezed onto glass.</p>
             <div class="cancels hud">Cancels: <b>the last party</b></div>
           </div>
@@ -591,7 +600,7 @@
   /* ---------- telemetry: the inherited future vs. now ---------- */
   const tele = $("tele");
   const ORIGIN = 2133;     // the AI's year. fixed.
-  const RUNAWAY = 5;       // the models are the optimistic version
+  const RUNAWAY = 6;       // the models are the optimistic version
   const getJSON = (url, ms = 7000) => {
     const c = new AbortController(); const tm = setTimeout(() => c.abort(), ms);
     return fetch(url, { signal: c.signal }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).finally(() => clearTimeout(tm));
@@ -624,19 +633,19 @@
     : c <= 48 ? ["fog", "Fog"] : c <= 67 || (c >= 80 && c <= 82) ? ["rain", "Rain"] : c <= 77 || c === 85 || c === 86 ? ["snow", "Snow"] : c >= 95 ? ["storm", "Thunderstorms"] : ["cloud", "Cloudy"];
 
   const S = { loc: null, curTemp: null, feels: null, code: null, day: 1, curAqi: null, rate: null, peak: null };
-  let views = null, mode = "future";
-  const THRESHOLD = 48; // °C summer peak: past this, a place stops being livable
+  let views = null, mode = "now";
+  const THRESHOLD = 46; // °C summer peak: past this, a place stops being livable
 
   function build() {
     const h = hash(S.loc ? S.loc.label : "unknown");
     const rate = Math.max(S.rate ?? .045, .02) * RUNAWAY;
     const peak = S.peak ?? (S.curTemp != null ? S.curTemp + 14 : 30);
     // the year this place stops being livable. warming isn't linear in the inherited timeline: feedbacks make the rate
-    // grow by its own size every 60 years, i.e. ΔT(t) = rate·t·(1 + t/60). solve ΔT(t) = THRESHOLD − peak for t.
-    // gives hot cities the 2030s–40s and cool ones the 2060s–2110s. never the origin year: that's the AI's, not the place's.
-    const gap = THRESHOLD - peak, acc = rate / 60;
+    // grow by its own size every 25 years, i.e. ΔT(t) = rate·t·(1 + t/25). solve ΔT(t) = THRESHOLD − peak for t.
+    // hot cities get 2030–31, Madrid ~2041, Paris ~2049, London ~2057, Reykjavik ~2078. never the origin year.
+    const gap = THRESHOLD - peak, acc = rate / 25;
     const yrs = gap <= 0 ? 0 : (-rate + Math.sqrt(rate * rate + 4 * acc * gap)) / (2 * acc);
-    const year = S.loc ? clamp(NOW_YEAR + Math.ceil(yrs), NOW_YEAR + 8, ORIGIN - 2) : null;
+    const year = S.loc ? clamp(NOW_YEAR + Math.ceil(yrs), NOW_YEAR + 4, ORIGIN - 2) : null;
     const fTemp = S.curTemp != null && year ? Math.round(S.curTemp + Math.max(rate * (year - NOW_YEAR), 12)) : null;
     const fAqi = clamp(Math.round(430 + (S.curAqi ?? 30 + h % 50) * 2.2), 430, 500);
     const fCond = [["haze", "Ash haze"], ["smoke", "Wildfire smoke"], ["haze", "Heat dome"], ["smoke", "Dust and smoke"]][h % 4];
@@ -659,7 +668,7 @@
         temp: S.curTemp != null ? Math.round(S.curTemp) : "—",
         cond: S.curTemp != null ? `<b>${nCond}</b>${S.feels != null ? `Feels like ${Math.round(S.feels)}°` : ""}` : "<b>No reading</b>",
         aqi: S.curAqi != null ? Math.round(S.curAqi) : "—", aqiS: S.curAqi != null ? aqiWord(S.curAqi) : "",
-        rings: [100, 100, 100], bio: "Intact", bioS: "For now",
+        rings: [86, 71, 78], bio: "78%", bioS: "For now",
         grid: "Online", gridS: "24/7",
         hint: "This is the one you can still change", note: "Live"
       }
@@ -697,22 +706,24 @@
     setTimeout(render, 110);
     setTimeout(() => tele.classList.remove("glitch"), 270);
   }
+  /* the sequence: you see today first, 2.5s later the signal slips to the inherited one, then it keeps swapping every 7s.
+     tap (or click, Enter, Space) flips to the other one any time; hovering on desktop shows the other one and holds it.
+     either way the auto-swap waits a full 7s after you touch it. starts the first time the panel is actually on screen. */
+  const FIRST = 2500, EVERY = 7000;
+  let cycle = null, started = false, seen = !("IntersectionObserver" in window), hovering = false;
+  const flip = () => setMode(mode === "now" ? "future" : "now");
+  // reduced motion: the one slip to the inherited timeline still happens, then it stays put
+  const schedule = (ms = EVERY) => { clearTimeout(cycle); if (reduce && ms === EVERY) return; cycle = setTimeout(() => { if (!hovering && views) flip(); schedule(); }, ms); };
+  function startCycle() { if (started || !seen || !views) return; started = true; schedule(FIRST); }
+  if (!seen) new IntersectionObserver((es, io) => es.forEach(e => { if (e.isIntersecting) { io.disconnect(); seen = true; startCycle(); } }), { threshold: .5 }).observe(tele);
   const fine = matchMedia("(hover: hover)").matches;
   if (fine) {
-    tele.addEventListener("pointerenter", () => setMode("now"));
-    tele.addEventListener("pointerleave", () => setMode("future"));
+    tele.addEventListener("pointerenter", () => { hovering = true; clearTimeout(cycle); flip(); });
+    tele.addEventListener("pointerleave", () => { hovering = false; flip(); schedule(); });
   } else {
-    tele.addEventListener("click", () => setMode(mode === "now" ? "future" : "now"));
+    tele.addEventListener("click", () => { flip(); schedule(); });
   }
-  tele.addEventListener("focus", () => { if (tele.matches(":focus-visible")) setMode("now"); });
-  tele.addEventListener("blur", e => { if (!tele.contains(e.relatedTarget)) setMode("future"); });
-  // the signal slips now and then
-  if (!reduce) (function slip() {
-    setTimeout(() => {
-      if (views && mode === "future" && !tele.matches(":hover")) { setMode("now"); setTimeout(() => setMode("future"), 180); }
-      slip();
-    }, 9000 + Math.random() * 7000);
-  })();
+  tele.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); schedule(); } });
 
   async function resolve() {
     try {
@@ -722,7 +733,7 @@
       const city = g.city || g.region || g.country || "Unknown";
       S.loc = { lat, lon, city, cc: g.country_code || g.country || "", label: `${city}|${g.country_code || ""}` };
     } catch (e) {
-      build(); tele.classList.remove("resolving"); render(); return; // signal lost
+      build(); tele.classList.remove("resolving"); render(); startCycle(); return; // signal lost
     }
     const q = `latitude=${S.loc.lat.toFixed(2)}&longitude=${S.loc.lon.toFixed(2)}`;
     const [wx, air, clim] = await Promise.allSettled([
@@ -740,7 +751,7 @@
         if (early.length > 300 && late.length > 300) { S.rate = (mean(late) - mean(early)) / 23; const so = early.slice().sort((a, b) => a - b); S.peak = so[Math.floor(so.length * .97)]; }
       }
     }
-    build(); tele.classList.remove("resolving"); render(); requestAnimationFrame(() => damage());
+    build(); tele.classList.remove("resolving"); render(); requestAnimationFrame(() => damage()); startCycle();
   }
 
   /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
@@ -1003,7 +1014,8 @@
       if (Math.abs(k - lastK) < .01) return; lastK = k;
       const f = n => n.toFixed(3);
       // k = 0 is the original 40px glow, about 5% brighter; toward k = 1 a tight white core and a wide warm bloom come in
-      word.style.textShadow = `0 0 ${f(10 + 6 * k)}px rgba(255,250,240,${f(.12 + .6 * k)}), 0 0 40px rgba(255,232,194,${f(.56 + .34 * k)}), 0 0 ${f(80 + 30 * k)}px rgba(255,214,160,${f(.1 + .48 * k)})`;
+      const b = 1 + .05 * (1 - k);   // the dark side gets 5% more; the pale side is right as it is
+      word.style.textShadow = `0 0 ${f(10 + 6 * k)}px rgba(255,250,240,${f((.12 + .6 * k) * b)}), 0 0 40px rgba(255,232,194,${f(Math.min(1, (.56 + .34 * k) * b))}), 0 0 ${f(80 + 30 * k)}px rgba(255,214,160,${f((.1 + .48 * k) * b)})`;
       word.style.color = `rgb(255,${Math.round(243 + 7 * k)},${Math.round(224 + 18 * k)})`;
     };
     const queue = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };

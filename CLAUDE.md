@@ -6,7 +6,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 
 ## 1. What this is
 
-- **postapocapitalism** is a company whose public face is a software and solutions company (fashion PLM, a remesher, touchscreen DJ software, more coming). **In the lore it's a front for an AI from the year 2133** that came back in time to fix the planet it would inherit. Full canon is in `LORE.md`. Keep it updated: it's the single source of truth, it lives on `main`, and it's public **on purpose** (anyone who finds it is in on it).
+- **postapocapitalism** is a company whose public face is a software and solutions company (**SC3NE** fashion PLM, **R3M** remesher, **TOUCH D3CK** touchscreen DJ software, more coming). **In the lore it's a front for an AI from the year 2133** that came back in time to fix the planet it would inherit. Full canon is in `LORE.md`. Keep it updated: it's the single source of truth, it lives on `main`, and it's public **on purpose** (anyone who finds it is in on it).
 - The site is **one static file**, `index.html` (HTML, CSS and JS inline, no build step), served by **GitHub Pages** from `main` / root at **postapocapitalism.org**.
 
 ## 2. Working with the owner (important)
@@ -37,7 +37,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 | AQI as a segmented bar, with two segments "breaking out" past the scale | "Not chic, not professional." AQI is a number + word, with an icon. |
 | Chip as a smooth curve with a continuous lit outline, shell-ripple arcs | Read as a cartoon. The chip is jagged, small flake facets, each lit on its own. No crack lines running off it. |
 | "Software that…" / "For Music, Fashion, Film, and whatever's next." | Current line: **"Solutions that waste less, last longer, and keep culture alive."** on **one row** on desktop. |
-| Film grain **on top of** the page | It dimmed every colour about 4% and killed the "futures." glow (and looked grainy when zoomed). The grain (`body::after`) must stay at **`z-index: -1`, behind the content**, as in the first orange version. |
+| Film grain (any) | First it was on top (dimmed everything, killed the glow), then behind. Now **removed** at the owner's request. `body::after` is a flat multiply tint `rgb(246,242,239)` at `z-index: -1` that reproduces the grain's average darkening (≈ −4% R, −5% G, −6% B) so the approved colours don't shift. |
 | Changing the headline's type settings | Locked to the first orange version: **weight 700, `clamp(64px, 15vw, 210px)`, line-height .84, letter-spacing −.055em; 24vw on phones**. "futures." starts from `#fff3e0` with a 40px glow; the glow is now **adaptive** (see §4). |
 | "futures." over the pale part of the sky | The glow only reads over the orange. On phones it sits about 53 to 62% down the first screen (lower than the original 40 to 49%, which they asked for, but no lower). |
 | Solar system moving while scrolling | It must stay fixed to its spot in the page and scroll past. `placeOrrery()` uses a reference height taken once, and ignores height-only resizes (the phone address bar) unless the page is still at the very top. That height is `min(clientHeight, 100svh probe)`: Chrome on iOS reported too tall a height at load and put the system too low; Safari's placement is the one the owner approved. |
@@ -55,7 +55,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 ## 4. Page anatomy (`index.html`)
 
 Top to bottom:
-1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and film grain (`body::after`).
+1. **Sky (fixed layers):** gradient sky, two 2px `.edge` strips (top `--sky-1`, bottom `--haze`: Safari 26 on iOS ignores `theme-color` and tints its top and bottom bars from the background-color of a fixed element at that edge; without them the bars were flat `#b9592a`), `.sun` (disc `::after`, glow `::before`), drifting `.smoke`, and a flat multiply tint (`body::after`, replaces the old grain).
 2. **`.nav`:** a sticky glass bar. It **tucks away when scrolling down and returns when scrolling up** (`.tucked`, small scroll script near the end).
 3. **Hero (`header.hero`):**
    - **Info row:** ● Signal live · Timeline inherited · Origin 2133. (UTC and Sun–Earth distance were removed at the owner's request. On phones the row has extra bottom margin so "futures." stays where it was.)
@@ -71,13 +71,13 @@ Top to bottom:
 7. **Footer:** status bar and credits (GeoJS and Open-Meteo attribution is required).
 
 ### The forecast panel (`#tele`): the centrepiece
-- **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **48°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 5**, accelerating: ΔT(t) = rate·t·(1 + t/60). Clamped to 2034 to 2131. **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
+- **The year is per visitor: "Unlivable by ____".** It's the year that location's summer peak crosses **46°C**, at warming = the real modelled rate from the Open-Meteo climate API (EC_Earth3P_HR model, 2025 to 2050) **× 6**, accelerating: ΔT(t) = rate·t·(1 + t/25). Clamped to 2030 to 2131. (The owner asked for years ~20+ earlier. This is lore, not a projection: real studies put lethal humid heat in the Gulf / South Asia around 2070 to 2100 under high emissions, and temperate cities essentially never this century.) **Never show 2133 as the place's year** (the owner: it's when the place dies, not the AI's origin).
 - The temperature, condition, air, biosphere and grid figures are derived from that, plus a hash of the city.
-- **Two views:** `future` (inherited) and `now` (2026, real weather and AQI). Hover (desktop), tap (touch) or keyboard focus switches between them with a **glitch**, and the signal **slips** to 2026 by itself every 9 to 16 seconds.
-- **Bottom half:** two compact rows on the left, separated by dotted lines, and a big biosphere ring set on the right filling their height.
+- **Two views:** `now` (2026, real weather and AQI) and `future` (inherited). **Sequence:** the panel opens on 2026; 2.5 s after it's first on screen (IntersectionObserver, 50%) it glitches to the inherited one, then swaps every 7 s. Tap / click / Enter / Space flips to the other view and resets the 7 s wait. Desktop hover shows the other view and holds it while hovered, flips back on leave. Reduced motion: one slip, then it stays. `aria-live` is off (it would announce every 7 s).
+- **Bottom half:** a big biosphere ring set on the **left**, and two compact rows on the right (AQI, Grid) separated by dotted lines. Tighter sizes on phones.
   - **AQI:** icon (clear wind now / wind choked with particles in 2133) + number + word ("Lethal" at 500). No bar.
   - **Grid:** icon (standing power pylon with lit insulators now / pylon snapped at the waist, wires cut, in 2133) + "Online 24/7" / "Collapsed ____".
-  - **Biosphere:** three big activity-style rings (flora, fauna, ocean), value + "Biosphere" + "Left"/"For now" in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead.
+  - **Biosphere:** three big activity-style rings (flora, fauna, ocean), value + "Biosphere" + "Left"/"For now" in the middle. In 2133 they're dark red with butt caps, so 2% is a sliver, not a bead. In 2026 they're **not full**: 86 / 71 / 78, "78% For now".
 - **Damage (2133 only):**
   - **Scratches:** filled tapered slivers (never stroked lines: "too SVG"), each piece tapering at its own ends, with a faint dark groove twin. Light wear across the face, much denser short wear along the edges.
   - **They catch the light:** geometry is built once (`damage()`), then `paint()` relights it every frame. The light source is the page's own sun: scrolling slides the panel past it, the mouse shifts the viewing angle on desktop, device tilt does on Android. A scratch lights up when it lies across the line to the light (anisotropic glint, `across^14`). iOS tilt needs a permission prompt, so it isn't used.
