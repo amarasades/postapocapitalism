@@ -1257,6 +1257,20 @@
        nav's lens bends. it covers a band ±260px around the nav in page coordinates, so while you scroll it just slides
        (no work); it's redrawn only when the nav reappears, when scrolling stops, or when the band runs out */
     const navP = panels.find(P => P.moves);
+    // the fonts as data URLs, for svg text rendered as an isolated image (it can't see the page's web fonts)
+    let fontCss = "";
+    (async () => { try {
+      const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]'); if (!link) return;
+      const css = await (await fetch(link.href)).text(), out = [];
+      // only the basic latin subset of Inter Tight 800 (the stamp's weight): Google labels each block with its subset
+      for (const [, sub, block] of css.matchAll(/\/\*\s*([\w-]+)\s*\*\/\s*(@font-face\s*{[^}]*})/g)) {
+        if (sub !== "latin" || !/Inter Tight/.test(block) || !/font-weight:\s*800/.test(block)) continue;
+        const u = (block.match(/url\(([^)]+)\)/) || [])[1]; if (!u) continue;
+        const buf = await (await fetch(u)).arrayBuffer(); let bin = ""; const by = new Uint8Array(buf); for (let i = 0; i < by.length; i += 8192) bin += String.fromCharCode.apply(null, by.subarray(i, i + 8192));
+        out.push(block.replace(/url\([^)]+\)/, `url(data:font/woff2;base64,${btoa(bin)})`));
+      }
+      fontCss = out.join("\n");
+    } catch (e) {} })();
     const navTxt = { ready: false, top: 0, w: 0, h: 0, cv: document.createElement("canvas"),
       // (the band is clamped at the page top, so "above" counts as covered there; otherwise this re-snapped forever)
       covers(b) { const t = b.top + scrollY; return this.ready && (t - 40 > this.top || this.top === 0) && t + b.height + 40 < this.top + this.h; },
@@ -1300,6 +1314,14 @@
           const cs = getComputedStyle(svg), W = svg.clientWidth || r.width, H = svg.clientHeight || r.height;
           clone.style.transform = "none"; clone.setAttribute("width", W); clone.setAttribute("height", H);
           if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+          // bring along any filters / gradients it references from elsewhere on the page: Safari doesn't draw an element
+          // whose filter is missing (the "pa" stamp vanished from the nav rim), Chrome does, which hid it
+          const refs = new Set(); clone.querySelectorAll("[filter],[fill],[stroke],[style]").forEach(e => {
+            for (const v of [e.getAttribute("filter"), e.getAttribute("fill"), e.getAttribute("stroke"), e.getAttribute("style")]) (v || "").replace(/url\(["']?#([^"')]+)["']?\)/g, (_, id) => refs.add(id)); });
+          if (refs.size) { const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            refs.forEach(id => { const d = document.getElementById(id); if (d && !svg.contains(d)) defs.appendChild(d.cloneNode(true)); }); clone.prepend(defs); }
+          // and the site's font, embedded, so svg text (the "pa") keeps its shape inside the isolated image
+          if (clone.querySelector("text") && fontCss) { const st = document.createElementNS("http://www.w3.org/2000/svg", "style"); st.textContent = fontCss; clone.prepend(st); }
           const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
           const pr = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); setTimeout(() => res(null), 1500); im.src = src; }); waits.push(pr);
           const m = cs.transform && cs.transform !== "none" ? new DOMMatrix(cs.transform) : null, cx = r.left + r.width / 2, cy = r.top - vTop + r.height / 2;
