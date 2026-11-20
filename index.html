@@ -1123,7 +1123,11 @@
         // (the panel's clip-path already cuts the crack out)
         if (dd < -2. || (uSee > 0. && dd > Bv)) { gl_FragColor = vec4(0.); return; }
         float t = 1. - clamp(dd / Bv, 0., 1.), m = t*t*(3. - 2.*t)*t;
-        vec2 off = length(g) > 0. && dd < Bv ? -normalize(g) * m * uGeo.z : vec2(0.);
+        // the rim shows what's just BEYOND the edge, squeezed in (like real thick glass / Apple's Liquid Glass): sample distance
+        // outward = S·(1−u)², u = depth into the bevel. that mapping only ever compresses (never < 1:1), so fine texture stays
+        // texture. the old inward pull stretched one source pixel over many near the rim (and folded): streaks on the paper
+        float u = clamp(dd / Bv, 0., 1.);
+        vec2 off = length(g) > 0. && dd < Bv ? normalize(g) * uGeo.z * (1. - u) * (1. - u) : vec2(0.);
         // full-spectrum dispersion: seven wavelengths, each bent a little less than the last (red most, violet least),
         // weighted by its colour; then the split is pushed apart for a saturated rainbow
         vec3 sum = vec3(0.), wsum = vec3(0.), avg = vec3(0.);

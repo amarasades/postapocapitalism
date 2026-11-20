@@ -27,6 +27,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
    - SVG textures (the paper grain) are **generated** in canvas (`grainTile`).
 2. **A fix only counts if Chrome runs the same code path Safari runs.** If a fix depends on how Safari treats something Chrome treats differently, it isn't verified: restructure until the path is identical, then test.
 3. Don't tell the owner something is fixed on iPhone unless rule 2 holds. Say what's unverified.
+4. **The lens compresses, it never stretches.** The bevel samples what's just *beyond* the edge, squeezed in: outward distance = S·(1−u)² (u = depth into the bevel), which only compresses. The old inward pull (`-n·m·S`) stretched one source pixel over many near the rim and folded: streaks on fine texture (paper grain, the stamp). Rainbow still comes from per-channel scales. (Desktop Chromium's feDisplacementMap still uses the old inward model.)
 
 ## 3. Rejected (don't bring these back)
 
