@@ -1310,7 +1310,10 @@
         const PROPS = ["fill", "stroke", "stroke-width", "stroke-opacity", "fill-opacity", "opacity", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "transform", "transform-origin", "transform-box", "display", "visibility", "font-family", "font-size", "letter-spacing", "filter"];
         const svgOps = (svg, r, op) => {
           const clone = svg.cloneNode(true), a = [svg, ...svg.querySelectorAll("*")], c = [clone, ...clone.querySelectorAll("*")];
-          a.forEach((el, i) => { const cs = getComputedStyle(el); c[i].setAttribute("style", PROPS.map(pn => `${pn}:${cs.getPropertyValue(pn)}`).join(";")); });
+          a.forEach((el, i) => { const cs = getComputedStyle(el); c[i].setAttribute("style", PROPS.map(pn => `${pn}:${cs.getPropertyValue(pn)}`).join(";")
+            // Safari reports url() references as absolute page URLs ("url(https://…/#decay)"), which point nowhere inside the
+            // isolated image, so it skipped the stamp entirely. keep them local
+            .replace(/url\(\s*["']?[^"')#]*#([^"')]+)["']?\s*\)/g, "url(#$1)")); });
           const cs = getComputedStyle(svg), W = svg.clientWidth || r.width, H = svg.clientHeight || r.height;
           clone.style.transform = "none"; clone.setAttribute("width", W); clone.setAttribute("height", H);
           if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
