@@ -1006,7 +1006,7 @@
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map0" }, f);
       mk("feGaussianBlur", { in: "map0", stdDeviation: .8, result: "map" }, f);   // smooths the bend map: no stair-steps in the warp
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * (nav ? 1.8 : 1.65), "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * (nav ? .2 : .35), "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * (nav ? 2.1 : 1.9), "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * (nav ? .05 : .2), "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
@@ -1022,7 +1022,7 @@
       // build the new filters first, swap, then drop the old ones, so the glass never flashes
       const id = "lg" + n++, old = el._lgIds || [];
       const nav = !!el.closest(".nav");
-      const scale = nav ? 2 * navBevel(w, h, r) : Math.min(64, Math.max(30, Math.min(w, h) * .45));
+      const scale = nav ? 2.6 * navBevel(w, h, r) : Math.min(64, Math.max(30, Math.min(w, h) * .45));
       el._lgBase = filter(id, w, h, lens(w, h, r, null, nav), scale, nav);
       el._lgChip = chip ? filter(id + "c", w, h, lens(w, h, r, chip), scale) : null;
       el._lgIds = chip ? [id, id + "c"] : [id];
@@ -1114,13 +1114,15 @@
         if (uv.x <= 0. || uv.y <= 0. || uv.x >= 1. || uv.y >= 1.) return vec4(0.);
         return texture2D(uTxt, vec2(uv.x, .5 + .5 * uv.y));
       }
-      vec3 behind(vec2 p, vec4 paper){
+      // q is where the ink (text, stamp) is sampled: it bends further than the sky so the letter visibly warps under the
+      // nav, while the paper grain stays put (bent grain smeared into streaks)
+      vec3 behind(vec2 p, vec2 q, vec4 paper){
         vec3 c = scene(p);
         if (uOrbA > 0.) { vec2 u = (p - uOrbR.xy) / uOrbR.zw;
           if (u.x > 0. && u.y > 0. && u.x < 1. && u.y < 1.) { vec4 o = texture2D(uOrb, u); c = mix(c, o.rgb, o.a * uOrbA); } }
         c *= vec3(246.,242.,239.)/255.;
         c = mix(c, paper.rgb, paper.a);
-        if (uTxtA > 0.) { vec2 u = (p - uTxtR.xy) / uTxtR.zw;
+        if (uTxtA > 0.) { vec2 u = (q - uTxtR.xy) / uTxtR.zw;
           if (u.x > 0. && u.y > 0. && u.x < 1. && u.y < 1.) {
             if (uTxtA > 1.5) u.y *= .5;
             vec4 ink = texture2D(uTxt, u);
@@ -1153,7 +1155,7 @@
           float fk = float(k), sk = 1.85 - fk * .26;
           vec3 w = fk < .5 ? vec3(1., 0., 0.) : fk < 1.5 ? vec3(1., .5, 0.) : fk < 2.5 ? vec3(1., 1., 0.) : fk < 3.5 ? vec3(0., 1., 0.)
                  : fk < 4.5 ? vec3(0., 1., 1.) : fk < 5.5 ? vec3(0., .3, 1.) : vec3(.55, 0., 1.);
-          vec3 sc = behind(p + off * sk, paper);
+          vec3 sc = behind(p + off * sk, p + off * sk * (uSee > 0. ? 2.4 : 1.), paper);
           sum += sc * w; wsum += w; avg += sc;
         }
         vec3 bent = sum / wsum; avg /= 7.;
@@ -1161,7 +1163,7 @@
         // refracted samples, so dispersion does not add a bright or dark band.
         vec3 luma = vec3(.2126, .7152, .0722);
         vec3 split = bent - avg;
-        bent = clamp(avg + split * 2.35, 0., 1.);
+        bent = clamp(avg + split * 2.8, 0., 1.);
         float target = dot(avg, luma), current = dot(bent, luma);
         if (current > target) bent *= target / current;
         else if (current < target) bent = mix(bent, vec3(1.), (target - current) / (1. - current));
@@ -1181,7 +1183,7 @@
         // the nav: with the page text redrawn (uTxtA) its whole bevel is drawn and bends the text too; without it, only
         // where the bend visibly changes the sky
         if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(.42, 1., u);   // soft hand-over to the clear middle
-        if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p, paper)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
+        if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p, p, paper)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
         gl_FragColor = vec4(c * a, a);
       }`;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
