@@ -996,7 +996,9 @@
         // Match the WebGL nav's outward profile. Sampling advances into the scene faster
         // than it moves through the bevel, so a fine texture is compressed at the lip.
         const bend = nav && B > 0 ? Math.max(0, 1 - d / B) ** 2 : -m;
-        D[k] = 128 + nx * bend * 127; D[k + 1] = 128 + ny * bend * 127; D[k + 2] = 128; D[k + 3] = 255;
+        // the nav is also a cylinder lens (as on the WebGL path): sideways pull toward the middle, strongest at top/bottom
+        const ny2 = nav ? ((py - cy) / (h / 2)) ** 2 : 0, bx = nav ? -Math.max(-1, Math.min(1, (px - cx) / 160)) * 9 * ny2 / (2.6 * B) * 2 : 0;
+        D[k] = 128 + (nx * bend + bx) * 127; D[k + 1] = 128 + ny * bend * 127; D[k + 2] = 128; D[k + 3] = 255;
       }
       ctx.putImageData(img, 0, 0);
       return cvs.toDataURL();
@@ -1140,7 +1142,13 @@
         // the WHOLE panel is drawn here (bent in the bevel, straight in the middle): no inner seam with the sky canvas
         // (two separately drawn layers meeting inside the panel showed as a notch in the sun on Safari), and no chip box
         // (the panel's clip-path already cuts the crack out)
-        if (dd < -2. || (uSee > 0. && dd > Bv)) { gl_FragColor = vec4(0.); return; }
+        // with the page redrawn under the nav, the whole bar is drawn and acts as a cylinder lens on the ink: pulled toward
+        // the middle more the nearer it is to the top/bottom edge, so vertical strokes (the stamp) curve. the outward rim
+        // shift alone moves a vertical stroke along itself, which looks like no bend at all
+        bool navInk = uSee > 0. && uTxtA > .5;
+        vec2 nd = (lp - h) / h;
+        vec2 barrel = navInk ? vec2(-clamp(nd.x * h.x / 160., -1., 1.) * 9. * nd.y * nd.y, 0.) : vec2(0.);
+        if (dd < -2. || (uSee > 0. && !navInk && dd > Bv)) { gl_FragColor = vec4(0.); return; }
         // the rim shows what's just BEYOND the edge, squeezed in (like real thick glass / Apple's Liquid Glass): sample distance
         // outward = S·(1−u)², u = depth into the bevel. that mapping only ever compresses (never < 1:1), so fine texture stays
         // texture. the old inward pull stretched one source pixel over many near the rim (and folded): streaks on the paper
@@ -1155,7 +1163,7 @@
           float fk = float(k), sk = 1.85 - fk * .26;
           vec3 w = fk < .5 ? vec3(1., 0., 0.) : fk < 1.5 ? vec3(1., .5, 0.) : fk < 2.5 ? vec3(1., 1., 0.) : fk < 3.5 ? vec3(0., 1., 0.)
                  : fk < 4.5 ? vec3(0., 1., 1.) : fk < 5.5 ? vec3(0., .3, 1.) : vec3(.55, 0., 1.);
-          vec3 sc = behind(p + off * sk, p + off * sk * (uSee > 0. ? 2.4 : 1.), paper);
+          vec3 sc = behind(p + off * sk, p + off * sk * (uSee > 0. ? 2.4 : 1.) + barrel * (1. + (sk - 1.) * .5), paper);
           sum += sc * w; wsum += w; avg += sc;
         }
         vec3 bent = sum / wsum; avg /= 7.;
@@ -1182,7 +1190,7 @@
         // changes the sky (the sun's rim), so the text under it never disappears behind a band
         // the nav: with the page text redrawn (uTxtA) its whole bevel is drawn and bends the text too; without it, only
         // where the bend visibly changes the sky
-        if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(.42, 1., u);   // soft hand-over to the clear middle
+        // (navInk: the whole bar is opaque, the lens covers its middle too)
         if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p, p, paper)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
         gl_FragColor = vec4(c * a, a);
       }`;
