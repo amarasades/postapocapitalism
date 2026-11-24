@@ -949,19 +949,21 @@
     const gx = Math.max(ax, 0) * Math.sign(px - cx), gy = Math.max(ay, 0) * Math.sign(py - cy), L = Math.hypot(gx, gy);
     return L ? [gx / L, gy / L] : [0, 0]; };
 
+  // Keep the nav's bevel inside the rounded corner so its normal never jumps across the centre line.
+  const navBevel = (w, h, r) => Math.min(r, Math.min(w, h) * .30);
+
   /* ---------- liquid glass: real refraction at the edges (Chromium), clear glass elsewhere ---------- */
   const LG = (() => {
     const ua = navigator.userAgent;
     if (!/Chrome\/|Edg\//.test(ua) || /CriOS|FxiOS|EdgiOS|Firefox/.test(ua) || /glass=(gl|plain)/.test(location.search)) return null;
     document.documentElement.classList.add("lg");
     const defs = $("lg-defs");
-    // displacement map: every pixel near an edge samples the backdrop from further inside, like a lens
-    function lens(w, h, r, chip) {
+    function lens(w, h, r, chip, nav) {
       // drawn at the screen's real resolution (a 1x map stretched over a retina screen made the edges blocky)
       const K = Math.min(devicePixelRatio || 1, 2), W = Math.round(w * K), H = Math.round(h * K);
       const cvs = document.createElement("canvas"); cvs.width = W; cvs.height = H;
       const ctx = cvs.getContext("2d"), img = ctx.createImageData(W, H), D = img.data;
-      const B = Math.max(14, Math.min(34, Math.min(w, h) * .36)), cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
+      const B = nav ? navBevel(w, h, r) : Math.max(14, Math.min(34, Math.min(w, h) * .36)), cx = w / 2, cy = h / 2, hx = w / 2 - r, hy = h / 2 - r;
       let bb = null, segs = null, poly = null, harsh = null;
       if (chip) {
         poly = chip; segs = [];
@@ -977,7 +979,7 @@
         const px = (x + .5) / K, py = (y + .5) / K, qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
         let d, nx, ny, cs = -1, ct = 0;
         d = r - (qx > 0 && qy > 0 ? Math.hypot(qx, qy) : Math.max(qx, qy));
-        [nx, ny] = rrN(px, py, cx, cy, w / 2, h / 2, Math.max(r, B + 1));
+        [nx, ny] = rrN(px, py, cx, cy, w / 2, h / 2, nav ? r : Math.max(r, B + 1));
         if (bb && px > bb[0] && px < bb[2] && py > bb[1] && py < bb[3]) {
           if (inside(px, py)) { d = 1e9; }
           else segs.forEach(([[ax, ay], [bx, by]], si) => {
@@ -990,17 +992,20 @@
         let Bw = B, str = 1;
         if (cs >= 0) { const hv = harsh[cs] + (harsh[cs + 1] - harsh[cs]) * ct; Bw = B * (1.3 - .85 * hv); str = .3 + .7 * hv; }
         let m = 0; if (d < Bw) { const t = 1 - d / Bw; m = t * t * (3 - 2 * t) * t * str; }
-        D[k] = 128 - nx * m * 127; D[k + 1] = 128 - ny * m * 127; D[k + 2] = 128; D[k + 3] = 255;
+        // Match the WebGL nav's outward profile. Sampling advances into the scene faster
+        // than it moves through the bevel, so a fine texture is compressed at the lip.
+        const bend = nav && B > 0 ? Math.max(0, 1 - d / B) ** 2 : -m;
+        D[k] = 128 + nx * bend * 127; D[k + 1] = 128 + ny * bend * 127; D[k + 2] = 128; D[k + 3] = 255;
       }
       ctx.putImageData(img, 0, 0);
       return cvs.toDataURL();
     }
-    function filter(id, w, h, href, scale) {
+    function filter(id, w, h, href, scale, nav) {
       const f = mk("filter", { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" }, defs);
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map0" }, f);
       mk("feGaussianBlur", { in: "map0", stdDeviation: .8, result: "map" }, f);   // smooths the bend map: no stair-steps in the warp
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * 1.28, "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * .72, "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * (nav ? 1.42 : 1.28), "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * (nav ? .58 : .72), "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
@@ -1018,8 +1023,9 @@
       const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
       // build the new filters first, swap, then drop the old ones, so the glass never flashes
       const id = "lg" + n++, old = el._lgIds || [];
-      const scale = Math.min(64, Math.max(30, Math.min(w, h) * .45));   // (110 smeared the sun into a giant disc and the chip into streaks)
-      el._lgBase = filter(id, w, h, lens(w, h, r, null), scale);
+      const nav = !!el.closest(".nav");
+      const scale = nav ? 2 * navBevel(w, h, r) : Math.min(64, Math.max(30, Math.min(w, h) * .45));
+      el._lgBase = filter(id, w, h, lens(w, h, r, null, nav), scale, nav);
       el._lgChip = chip ? filter(id + "c", w, h, lens(w, h, r, chip), scale) : null;
       el._lgIds = chip ? [id, id + "c"] : [id];
       show(el);
@@ -1099,8 +1105,8 @@
     // to the panel's shape by the browser: the clip moves with the panel in the same frame (so nothing ever spills or
     // trails outside it), and the picture stays fixed to the screen like the sun (so the rainbow doesn't lag)
     const LENS_FS = COMMON + `
-      uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2; uniform float uFbH;
-      uniform sampler2D uOrb; uniform vec4 uOrbR; uniform float uOrbA; uniform float uSee; uniform float uK;
+      uniform vec4 uRect; uniform vec3 uGeo; uniform vec3 uChip; uniform vec4 uF0, uF1, uF2; uniform vec2 uFb;
+      uniform sampler2D uOrb; uniform vec4 uOrbR; uniform float uOrbA; uniform float uSee;
       uniform sampler2D uTxt; uniform vec4 uTxtR; uniform float uTxtA;
       // what's behind the glass: sky, sun, the solar system (snapshot texture), all under the page tint, and for the nav
       // the page text (redrawn into a texture, see NAVTEXT), which sits above the tint
@@ -1113,16 +1119,16 @@
           if (u.x > 0. && u.y > 0. && u.x < 1. && u.y < 1.) { vec4 t = texture2D(uTxt, u); c = mix(c, t.rgb, t.a); } }
         return c; }
       void main(){
-        vec2 lp = vec2(gl_FragCoord.x, uFbH - gl_FragCoord.y) / uK, p = uRect.xy + lp, h = uRect.zw * .5;
+        vec2 lp = vec2(gl_FragCoord.x, uFb.y - gl_FragCoord.y) * uRect.zw / uFb, p = uRect.xy + lp, h = uRect.zw * .5;
         float R = uGeo.x, Bv = uGeo.y;
         vec2 q = abs(lp - h) - (h - R);
         float dd = -(length(max(q, 0.)) + min(max(q.x, q.y), 0.) - R);
-        vec2 g = max(abs(lp - h) - (h - max(R, Bv + 1.)), 0.) * sign(lp - h);
+        float normalRadius = uSee > 0. ? R : max(R, Bv + 1.);
+        vec2 g = max(abs(lp - h) - (h - normalRadius), 0.) * sign(lp - h);
         // the WHOLE panel is drawn here (bent in the bevel, straight in the middle): no inner seam with the sky canvas
         // (two separately drawn layers meeting inside the panel showed as a notch in the sun on Safari), and no chip box
         // (the panel's clip-path already cuts the crack out)
         if (dd < -2. || (uSee > 0. && dd > Bv)) { gl_FragColor = vec4(0.); return; }
-        float t = 1. - clamp(dd / Bv, 0., 1.), m = t*t*(3. - 2.*t)*t;
         // the rim shows what's just BEYOND the edge, squeezed in (like real thick glass / Apple's Liquid Glass): sample distance
         // outward = S·(1−u)², u = depth into the bevel. that mapping only ever compresses (never < 1:1), so fine texture stays
         // texture. the old inward pull stretched one source pixel over many near the rim (and folded): streaks on the paper
@@ -1140,7 +1146,8 @@
         }
         vec3 bent = sum / wsum; avg /= 7.;
         bent = clamp(avg + (bent - avg) * (uSee > 0. ? 1.15 : 1.9), 0., 1.);   // the nav bends text: a gentler split there
-        bent = mix(behind(p), bent, smoothstep(0., 2., dd));                 // ease in over the outer 2px: no stair-steps
+        // The panel's clip antialiases the rim. Blending an unbent ray here
+        // draws the sun twice at the lip and breaks the compression profile.
         vec3 c = bent;                                                      // (the page tint is applied inside behind())
         vec2 dir = vec2(.342, .9397); float gt = dot(lp - h, dir) / (.342*uRect.z + .9397*uRect.w) + .5;
         vec4 f = gt < .45 ? mix(uF0, uF1, gt/.45) : mix(uF1, uF2, (gt - .45)/.55);
@@ -1155,7 +1162,7 @@
         // the nav: with the page text redrawn (uTxtA) its whole bevel is drawn and bends the text too; without it, only
         // where the bend visibly changes the sky
         if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(Bv - 3., Bv, dd);   // soft hand-over to the clear middle
-        if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.015, .09, max(dc.r, max(dc.g, dc.b))); }
+        if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
         gl_FragColor = vec4(c * a, a);
       }`;
     const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
@@ -1190,7 +1197,7 @@
     const panels = [...document.querySelectorAll(".glass")].map(el => {
       const c = document.createElement("canvas"); c.className = "lensfix"; c.setAttribute("aria-hidden", "true");
       const g = c.getContext("webgl", { ...opts, alpha: true, premultipliedAlpha: true }); if (!g) return null;
-      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFbH", "uOrb", "uOrbR", "uOrbA", "uSee", "uK", "uTxt", "uTxtR", "uTxtA"]); if (!U) return null;
+      const U = program(g, LENS_FS, [...SCENE_U, "uRect", "uGeo", "uChip", "uF0", "uF1", "uF2", "uFb", "uOrb", "uOrbR", "uOrbA", "uSee", "uTxt", "uTxtR", "uTxtA"]); if (!U) return null;
       const tex = g.createTexture(); g.bindTexture(g.TEXTURE_2D, tex);
       [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]].forEach(([k, v]) => g.texParameteri(g.TEXTURE_2D, k, v));
       g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 1, 1, 0, g.RGBA, g.UNSIGNED_BYTE, new Uint8Array(4)); g.uniform1i(U.uOrb, 0);
@@ -1216,7 +1223,7 @@
       const { g, U } = P, b = P.el.getBoundingClientRect();   // live, every draw: cached positions went stale when the forecast loaded and pushed the cards down
       P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
       if (P.c.width !== Math.round(P.w * P.k) || P.c.height !== Math.round(P.h * P.k)) { P.c.width = Math.round(P.w * P.k); P.c.height = Math.round(P.h * P.k); }
-      g.viewport(0, 0, P.c.width, P.c.height); g.uniform1f(U.uFbH, P.c.height); g.uniform1f(U.uSee, P.moves ? 1 : 0); g.uniform1f(U.uK, P.k);
+      g.viewport(0, 0, P.c.width, P.c.height); g.uniform2f(U.uFb, P.c.width, P.c.height); g.uniform1f(U.uSee, P.moves ? 1 : 0);
       if (P.moves && navTxt.ready) { const ok = navTxt.covers(b); if (b.bottom > 0 && !ok && performance.now() - (navTxt.at || 0) > 250) navTxt.snap(b);
         g.uniform4f(U.uTxtR, 0, navTxt.top - scrollY, navTxt.w, navTxt.h); g.uniform1f(U.uTxtA, ok ? 1 : 0); }
       else g.uniform1f(U.uTxtA, 0);
@@ -1224,8 +1231,10 @@
       g.uniform4f(U.uRect, b.left, b.top, P.w, P.h);
       // the nav is a slim bar over text: a thin rim and a gentle bend (the panel formula made nearly all of it bevel and
       // smeared the headline into rainbow blobs)
-      if (P.moves) g.uniform3f(U.uGeo, P.r, Math.min(12, P.h * .26), 11);
-      else g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
+      if (P.moves) {
+        const bevel = navBevel(P.w, P.h, P.r);
+        g.uniform3f(U.uGeo, P.r, bevel, bevel * .82);
+      } else g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
       [U.uF0, U.uF1, U.uF2].forEach(u => g.uniform4f(u, 0, 0, 0, 0));
       g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
@@ -1387,7 +1396,21 @@
       } };
     if (navP) {
       const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
-      new MutationObserver(re).observe(document.querySelector(".nav"), { attributes: true, attributeFilter: ["class"] });
+      const nav = navP.el.closest(".nav");
+      new MutationObserver(re).observe(nav, { attributes: true, attributeFilter: ["class"] });
+      // The nav can keep sliding after scroll events stop. Follow the CSS transform
+      // so its canvas keeps sampling the sun at the bar's actual screen position.
+      let navFrame = 0;
+      const drawMovingNav = () => { drawLens(navP); navFrame = requestAnimationFrame(drawMovingNav); };
+      nav.addEventListener("transitionrun", e => {
+        if (e.target === nav && e.propertyName === "transform" && !navFrame) drawMovingNav();
+      });
+      const finishNav = e => {
+        if (e.target !== nav || e.propertyName !== "transform") return;
+        cancelAnimationFrame(navFrame); navFrame = 0; drawLens(navP);
+      };
+      nav.addEventListener("transitionend", finishNav);
+      nav.addEventListener("transitioncancel", finishNav);
       if (document.fonts) document.fonts.ready.then(re); else re();
       setInterval(() => { if (!(window.__vsMoving && window.__vsMoving())) re(); }, 4000);   // keeps up with the forecast's own changes when still
     }
