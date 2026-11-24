@@ -89,6 +89,7 @@
   .nav { position: sticky; top: 14px; z-index: 10; margin-top: 14px; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s; }
   .nav.tucked { transform: translateY(calc(-100% - 20px)); opacity: 0; pointer-events: none; }
   .nav .glass { --r: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 10px 9px 16px; }
+  .nav .glass { background: linear-gradient(180deg, rgba(255,248,238,.055), transparent 32% 72%, rgba(255,240,220,.035)); }
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -.02em; font-size: 15px; }
   .brand svg { width: 20px; height: 20px; }
   .nav nav { display: flex; gap: 2px; }
@@ -1005,16 +1006,13 @@
       mk("feImage", { href, x: 0, y: 0, width: w, height: h, preserveAspectRatio: "none", result: "map0" }, f);
       mk("feGaussianBlur", { in: "map0", stdDeviation: .8, result: "map" }, f);   // smooths the bend map: no stair-steps in the warp
       // split the channels and bend each by a slightly different amount: dispersion at the rim
-      [["R", scale * (nav ? 1.42 : 1.28), "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * (nav ? .58 : .72), "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
+      [["R", scale * (nav ? 1.8 : 1.65), "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["G", scale, "0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["B", scale * (nav ? .2 : .35), "0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"]].forEach(([c, s, m]) => {
         mk("feDisplacementMap", { in: "SourceGraphic", in2: "map", scale: s, xChannelSelector: "R", yChannelSelector: "G", result: "d" + c }, f);
         mk("feColorMatrix", { in: "d" + c, type: "matrix", values: m, result: "c" + c }, f);
       });
       mk("feBlend", { in: "cR", in2: "cG", mode: "screen", result: "rg" }, f);
       mk("feBlend", { in: "rg", in2: "cB", mode: "screen", result: "rgb" }, f);
       mk("feGaussianBlur", { in: "rgb", stdDeviation: .35, result: "soft" }, f);
-      // no saturation boost: glass bends light, it doesn't add colour. a touch of brightness, like light passing through
-      const ct = mk("feComponentTransfer", { in: "soft" }, f);
-      ["feFuncR", "feFuncG", "feFuncB"].forEach(t => mk(t, { type: "linear", slope: 1.04 }, ct));
       return `url(#${id})`;
     }
     let n = 0;
@@ -1138,14 +1136,21 @@
         // weighted by its colour; then the split is pushed apart for a saturated rainbow
         vec3 sum = vec3(0.), wsum = vec3(0.), avg = vec3(0.);
         for (int k = 0; k < 7; k++) {
-          float fk = float(k), sk = 1.5 - fk * .14;
+          float fk = float(k), sk = 1.85 - fk * .26;
           vec3 w = fk < .5 ? vec3(1., 0., 0.) : fk < 1.5 ? vec3(1., .5, 0.) : fk < 2.5 ? vec3(1., 1., 0.) : fk < 3.5 ? vec3(0., 1., 0.)
                  : fk < 4.5 ? vec3(0., 1., 1.) : fk < 5.5 ? vec3(0., .3, 1.) : vec3(.55, 0., 1.);
           vec3 sc = behind(p + off * sk);
           sum += sc * w; wsum += w; avg += sc;
         }
         vec3 bent = sum / wsum; avg /= 7.;
-        bent = clamp(avg + (bent - avg) * (uSee > 0. ? 1.15 : 1.9), 0., 1.);   // the nav bends text: a gentler split there
+        // Amplify the color split while keeping the average luminance of the
+        // refracted samples, so dispersion does not add a bright or dark band.
+        vec3 luma = vec3(.2126, .7152, .0722);
+        vec3 split = bent - avg;
+        bent = clamp(avg + split * 2.35, 0., 1.);
+        float target = dot(avg, luma), current = dot(bent, luma);
+        if (current > target) bent *= target / current;
+        else if (current < target) bent = mix(bent, vec3(1.), (target - current) / (1. - current));
         // The panel's clip antialiases the rim. Blending an unbent ray here
         // draws the sun twice at the lip and breaks the compression profile.
         vec3 c = bent;                                                      // (the page tint is applied inside behind())
@@ -1161,7 +1166,7 @@
         // changes the sky (the sun's rim), so the text under it never disappears behind a band
         // the nav: with the page text redrawn (uTxtA) its whole bevel is drawn and bends the text too; without it, only
         // where the bend visibly changes the sky
-        if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(Bv - 3., Bv, dd);   // soft hand-over to the clear middle
+        if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(.42, 1., u);   // soft hand-over to the clear middle
         if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
         gl_FragColor = vec4(c * a, a);
       }`;
@@ -1322,7 +1327,7 @@
         // new one is complete, so nothing blocks scrolling
         if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true; this.at = performance.now();
         const k = navP.k, M = 260, top = Math.max(0, b.top + scrollY - M), h = Math.round(b.height + 2 * M), w = Math.round(innerWidth);
-        const vTop = top - scrollY, vBot = vTop + h, sy0 = scrollY;
+        const vTop = top - scrollY, vBot = vTop + h;
         const ops = [], waits = [];
         const visible = r => r.bottom > vTop && r.top < vBot && r.width > 0 && r.height > 0;
         const opacityOf = el => { let op = 1; for (let e = el; e && e !== document.body; e = e.parentElement) op *= parseFloat(getComputedStyle(e).opacity); return op; };
@@ -1344,8 +1349,31 @@
                 stops.forEach((m, i) => gr.addColorStop(Math.min(1, m[2] ? parseFloat(m[2]) / 100 : i / Math.max(1, stops.length - 1)), m[1] === "transparent" ? "rgba(0,0,0,0)" : m[1]));
                 x.globalAlpha = op; x.fillStyle = gr; x.fill(path); }); continue; }
             const u = /^\s*url\("?(.*?)"?\)\s*$/.exec(layer);
-            if (u) { ops.push(x => { const pat = x.createPattern(grainTile, "repeat");   // svg textures (the paper grain) → generated grain
-                pat.setTransform && pat.setTransform(new DOMMatrix().translate(X, Y).scale(1 / k)); x.globalAlpha = op; x.fillStyle = pat; x.fill(path); }); }
+            if (u) {
+              const image = loadImg(u[1]);
+              waits.push(image);
+              ops.push(async x => {
+                const tile = await image;
+                const pat = x.createPattern(tile || grainTile, "repeat");
+                if (!pat) return;
+                pat.setTransform?.(new DOMMatrix().translate(X + el.clientLeft, Y + el.clientTop));
+                x.globalAlpha = op; x.fillStyle = pat; x.fill(path);
+              });
+            }
+            // Reproduce the paper's elliptical light in the same padding box as its CSS background.
+            const glow = /^\s*radial-gradient\(ellipse at 30% 20%,\s*(rgba\([^)]*\)),\s*transparent 60%\)$/.exec(layer);
+            if (glow) ops.push(x => {
+              const cx = X + el.clientLeft + .3 * el.clientWidth, cy = Y + el.clientTop + .2 * el.clientHeight;
+              const rx = .7 * el.clientWidth * Math.SQRT2, ry = .8 * el.clientHeight * Math.SQRT2;
+              if (!rx || !ry) return;
+              x.save(); x.clip(path);
+              x.translate(cx, cy); x.scale(rx, ry);
+              const gradient = x.createRadialGradient(0, 0, 0, 0, 0, 1);
+              gradient.addColorStop(0, glow[1]); gradient.addColorStop(.6, "rgba(255,255,255,0)");
+              x.globalAlpha = op; x.fillStyle = gradient;
+              x.fillRect(-1, -1, 2, 2);
+              x.restore();
+            });
           }
         };
         const range = document.createRange();
