@@ -89,7 +89,9 @@
   .nav { position: sticky; top: 14px; z-index: 10; margin-top: 14px; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s; }
   .nav.tucked { transform: translateY(calc(-100% - 20px)); opacity: 0; pointer-events: none; }
   .nav .glass { --r: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 10px 9px 16px; }
-  .nav .glass { background: linear-gradient(180deg, rgba(255,248,238,.055), transparent 32% 72%, rgba(255,240,220,.035)); }
+  .nav .glass { background: transparent; box-shadow: 0 18px 44px -22px rgba(60, 20, 5, .5); }
+  .nav .lensbg { box-shadow: none; }
+  .nav .glass::after { opacity: 0; }
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -.02em; font-size: 15px; }
   .brand svg { width: 20px; height: 20px; }
   .nav nav { display: flex; gap: 2px; }
@@ -1166,7 +1168,7 @@
         // changes the sky (the sun's rim), so the text under it never disappears behind a band
         // the nav: with the page text redrawn (uTxtA) its whole bevel is drawn and bends the text too; without it, only
         // where the bend visibly changes the sky
-        if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(.42, 1., u);   // soft hand-over to the clear middle
+        if (uSee > 0. && uTxtA > .5) a = 1. - smoothstep(.68, 1., u);   // soft hand-over to the clear middle
         if (uSee > 0. && uTxtA < .5) { vec3 dc = abs(bent - behind(p)); a *= smoothstep(.004, .045, max(dc.r, max(dc.g, dc.b))); }
         gl_FragColor = vec4(c * a, a);
       }`;
@@ -1237,8 +1239,8 @@
       // the nav is a slim bar over text: a thin rim and a gentle bend (the panel formula made nearly all of it bevel and
       // smeared the headline into rainbow blobs)
       if (P.moves) {
-        const bevel = navBevel(P.w, P.h, P.r);
-        g.uniform3f(U.uGeo, P.r, bevel, bevel * .82);
+        const bevel = Math.min(P.r, mn * .42);
+        g.uniform3f(U.uGeo, P.r, bevel, bevel * 1.25);
       } else g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
       [U.uF0, U.uF1, U.uF2].forEach(u => g.uniform4f(u, 0, 0, 0, 0));
@@ -1401,7 +1403,18 @@
             // the solar system has hundreds of parts: reuse its once-a-second snapshot instead of re-serialising it
             if (el === orbSvg && orbReady) { const R0 = orbEl.getBoundingClientRect(); ops.push(x => { x.globalAlpha = orbAlpha; x.drawImage(orbCv, R0.left, R0.top - vTop, R0.width, R0.height); }); return; }
             ops.push(x => { x.save(); drawSvgVector(x, el, 0, vTop, k, op); x.restore(); x.setTransform(k, 0, 0, k, 0, 0); }); return; }
-          if (el.tagName === "IMG") { if (visible(r) && el.complete && el.naturalWidth && !/\.svg|svg\+xml/.test(el.currentSrc || el.src)) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
+          if (el.tagName === "IMG") {
+            if (!visible(r) || /\.svg|svg\+xml/.test(el.currentSrc || el.src)) return;
+            if (!el.complete || !el.naturalWidth) {
+              if (!el.complete) el.addEventListener("load", refreshNav, { once: true });
+              return;
+            }
+            ops.push(x => {
+              x.globalAlpha = op;
+              x.drawImage(el, r.left, r.top - vTop, r.width, r.height);
+            });
+            return;
+          }
           if (el.tagName === "CANVAS") { if (visible(r) && el.width && el.height) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
           for (const ch of el.childNodes) { if (ch.nodeType === 3) { if (ch.nodeValue.trim()) textOps(ch, el, cs, op); } else if (ch.nodeType === 1) walk(ch); }
         };
@@ -1422,10 +1435,10 @@
           drawLens(navP);
         }).catch(() => { this.busy = false; });
       } };
+    const refreshNav = () => { if (!navP.el.closest(".nav").classList.contains("tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
     if (navP) {
-      const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
       const nav = navP.el.closest(".nav");
-      new MutationObserver(re).observe(nav, { attributes: true, attributeFilter: ["class"] });
+      new MutationObserver(refreshNav).observe(nav, { attributes: true, attributeFilter: ["class"] });
       // The nav can keep sliding after scroll events stop. Follow the CSS transform
       // so its canvas keeps sampling the sun at the bar's actual screen position.
       let navFrame = 0;
@@ -1439,8 +1452,8 @@
       };
       nav.addEventListener("transitionend", finishNav);
       nav.addEventListener("transitioncancel", finishNav);
-      if (document.fonts) document.fonts.ready.then(re); else re();
-      setInterval(() => { if (!(window.__vsMoving && window.__vsMoving())) re(); }, 4000);   // keeps up with the forecast's own changes when still
+      if (document.fonts) document.fonts.ready.then(refreshNav); else refreshNav();
+      setInterval(() => { if (!(window.__vsMoving && window.__vsMoving())) refreshNav(); }, 4000);   // keeps up with the forecast's own changes when still
     }
     const drawLenses = () => { syncSize(); panels.forEach(drawLens);
       clearTimeout(settle); settle = setTimeout(() => { syncSize(); panels.forEach(drawLens); }, 140); };   // one clean redraw after the scroll stops
