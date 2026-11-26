@@ -48,7 +48,7 @@ Every product is **a tool that stops us eating ourselves alive**. Each one cance
 |---|---|---|
 | **Sc3ne** (fashion PLM) | Product lifecycle management for fashion, from sketch to production run. | Fashion waste and overproduction. |
 | **R3mesher** (remesher, the 3 is the E) | Turns messy scans and sculpts into clean, usable topology. | A culture of discarding; it supports making and repairing. |
-| **Cad3t** (CAD; name read from a voice note as "CAD 3T", confirm spelling) | Parametric CAD for drawing spare parts and repairs. | Throwaway objects: one broken clip binning a whole machine. |
+| **Cad3t** (CAD) | Full CAD (not just parametric) for furniture, enclosures and the electronics inside them, CNC output; also a tool for Sc3ne. Draw the spare part instead of buying the whole machine again. | Throwaway objects: one broken clip binning a whole machine. |
 | **Touch D3ck** (touchscreen DJ) | Touchscreen-first DJ software. | Culture dying out; it keeps culture alive. |
 | *More incoming* | | |
 
