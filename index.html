@@ -1992,7 +1992,32 @@ if (mark) {
       solve(); }
     let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N;
     for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; P[3 * i + 2] -= zm; }
-    snaps.unshift(Float32Array.from(P));
+    const OPEN = Float32Array.from(P), BALL = snaps[snaps.length - 1];
+    // the path between them is NOT the squeeze played backwards (that was a puffy pillow mid-way: the sheet wrapped on a
+    // big sphere). it's every fold opening at once: the distance across every hinge goes from its value in the ball to
+    // its value in the open sheet, edges stay inextensible, layers push apart. so mid-way it's the same sheet, still
+    // folded along the same lines, just less. the last stages ease it onto the open sheet exactly
+    const hd = A => { const o = new Float32Array(NH); for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3; o[e] = Math.hypot(A[b] - A[a], A[b + 1] - A[a + 1], A[b + 2] - A[a + 2]); } return o; };
+    const hB = hd(BALL), hO = hd(OPEN), tgt = new Float32Array(NH), path = [Float32Array.from(BALL)];
+    P.set(BALL);
+    for (let k = 1; k < STAGES - 1; k++) {
+      const sk = k / (STAGES - 1);
+      const g = 1 - Math.pow(1 - sk, 2.6); for (let e = 0; e < NH; e++) tgt[e] = hB[e] + (hO[e] - hB[e]) * g;
+      for (let it = 0; it < 36; it++) {
+        for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
+          P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; }
+        for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - tgt[e]) / d * .5;
+          P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; }
+        if (it % 3 === 2) repel();
+        const w = .06 * Math.pow(sk, 3);   // drift toward where the open sheet lies, more and more
+        if (w > 0) for (let i = 0; i < P.length; i++) P[i] += (OPEN[i] - P[i]) * w;
+      }
+      let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += P[3 * i]; my += P[3 * i + 1]; mz += P[3 * i + 2]; }
+      mx /= N; my /= N; mz /= N; const f = 1 - sk; for (let i = 0; i < N; i++) { P[3 * i] -= mx * f; P[3 * i + 1] -= my * f; P[3 * i + 2] -= mz * f; }
+      path.push(Float32Array.from(P));
+    }
+    path.push(OPEN);
+    snaps.length = 0; for (let k = path.length - 1; k >= 0; k--) snaps.push(path[k]);   // [0] open … [last] ball
     const flat = new Float32Array(N * 2); for (let i = 0; i < N; i++) { flat[2 * i] = X[i]; flat[2 * i + 1] = Y[i]; }
     return { flat, tris, snaps, creases: new Uint32Array(CE) };
   }
@@ -2115,9 +2140,15 @@ if (mark) {
     mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: .5 });
 
     const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    // time runs evenly over how much the paper visibly changes (its spread), not over the recorded stages: the first
+    // stages out of the ball barely change its size and held a still ball for a third of the animation
+    const spread = snaps.map(A => { let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += A[3 * i]; my += A[3 * i + 1]; mz += A[3 * i + 2]; } mx /= N; my /= N; mz /= N;
+      let s2 = 0; for (let i = 0; i < N; i++) s2 += (A[3 * i] - mx) ** 2 + (A[3 * i + 1] - my) ** 2 + (A[3 * i + 2] - mz) ** 2; return Math.sqrt(s2 / N); });
+    const cum = [0]; for (let k = 1; k < STAGES; k++) cum.push(cum[k - 1] + Math.abs(spread[k] - spread[k - 1]) + .015);
+    const stageAt = c => { c *= cum[STAGES - 1]; let k = 0; while (k < STAGES - 2 && cum[k + 1] < c) k++; return k + Math.min(1, (c - cum[k]) / (cum[k + 1] - cum[k] || 1)); };
     const pose = o => {
       // o = 1 open, 0 ball: walk the recorded squeeze. eased, so it bursts out of the ball and settles flat
-      const f = (1 - ease(o)) * (STAGES - 1), k = Math.min(STAGES - 2, Math.floor(f)), u = f - k, A = snaps[k], Bs = snaps[k + 1], a = pos.array, n = nor.array;
+      const f = stageAt(1 - o * o * (3 - 2 * o)), k = Math.min(STAGES - 2, Math.floor(f)), u = f - k, A = snaps[k], Bs = snaps[k + 1], a = pos.array, n = nor.array;
       for (let i = 0; i < V.length; i++) V[i] = A[i] + (Bs[i] - A[i]) * u;
       for (let t = 0; t < T; t++) {   // area-weighted face normals
         const p = tris[3 * t] * 3, q = tris[3 * t + 1] * 3, r = tris[3 * t + 2] * 3;
@@ -2126,11 +2157,11 @@ if (mark) {
         for (let c = 0; c < 3; c++) { const v = tris[3 * t + c] * 3, j = (3 * t + c) * 3; a[j] = V[v]; a[j + 1] = V[v + 1]; a[j + 2] = V[v + 2]; }
       }
       for (let t = 0; t < T; t++) { const l = Math.hypot(TN[3 * t], TN[3 * t + 1], TN[3 * t + 2]) || 1; TU[3 * t] = TN[3 * t] / l; TU[3 * t + 1] = TN[3 * t + 1] / l; TU[3 * t + 2] = TN[3 * t + 2] / l; }
-      // inside a wedge, a neighbour counts less the more it's turned away: a fold of more than ~40° stays a hard edge even
+      // inside a wedge, a neighbour counts less the more it's turned away: a fold of more than ~25° stays a hard edge even
       // off the crease lines (the ball is full of them), while the open sheet's gentle dents melt smooth
       for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
         for (let w = wStart[c]; w < wStart[c + 1]; w++) { const t = wl[w] * 3; if (t === s0) continue;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .77 ? (d - .77) / .23 : 0;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .9 ? (d - .9) / .1 : 0;
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         const l = Math.hypot(x, y, z) || 1; n[3 * c] = x / l; n[3 * c + 1] = y / l; n[3 * c + 2] = z / l; }
       pos.needsUpdate = true; nor.needsUpdate = true; geo.computeBoundingSphere();
