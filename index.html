@@ -1369,8 +1369,17 @@
         const visible = r => r.bottom > vTop && r.top < vBot && r.width > 0 && r.height > 0;
         const opacityOf = el => { let op = 1; for (let e = el; e && e !== document.body; e = e.parentElement) op *= parseFloat(getComputedStyle(e).opacity); return op; };
         const imgCache = this.imgs || (this.imgs = new Map());
+        // images become ImageBitmaps decoded from their own bytes (data: URL → Blob → createImageBitmap), never <img> / Image
+        // objects: Chrome on iPhone marked the canvas insecure after drawing the stamp / paper grain from their data: URLs
+        // ("upload: The operation is insecure", seen with ?glassdebug), so the texture never updated over the letter. a bitmap
+        // made from a Blob is always origin-clean, in every browser, and Chrome runs the same code. no data: URL → skipped
         const loadImg = src => { if (imgCache.has(src)) return imgCache.get(src);
-          const p = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); setTimeout(() => res(null), 1500); im.src = src; }); imgCache.set(src, p); return p; };
+          const p = new Promise(res => { setTimeout(() => res(null), 1500);
+            try { const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(src); if (!m || !window.createImageBitmap || /svg/.test(m[1])) return res(null);
+              let bytes; if (m[2]) { const bin = atob(m[3]); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+              else bytes = new TextEncoder().encode(decodeURIComponent(m[3]));
+              createImageBitmap(new Blob([bytes], { type: m[1] || "image/png" })).then(res, () => res(null)); } catch (e) { res(null); } });
+          imgCache.set(src, p); return p; };
         const bgOps = (el, r, cs, op, ops) => {
           const rad = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, r.width / 2, r.height / 2);
           const X = r.left, Y = r.top - vTop, path = new Path2D(); path.roundRect ? path.roundRect(X, Y, r.width, r.height, rad) : path.rect(X, Y, r.width, r.height);
@@ -1387,7 +1396,7 @@
                 x.globalAlpha = op; x.fillStyle = gr; x.fill(path); }); continue; }
             const u = /^\s*url\("?(.*?)"?\)\s*$/.exec(layer);
             if (u) {
-              const image = loadImg(u[1]);
+              const image = this.safe ? Promise.resolve(null) : loadImg(u[1]);   // safe mode: the generated grain
               waits.push(image);
               ops.push(async x => {
                 const tile = await image;
@@ -1438,7 +1447,7 @@
             // the solar system has hundreds of parts: reuse its once-a-second snapshot instead of re-serialising it
             if (el === orbSvg && orbReady) { const R0 = orbEl.getBoundingClientRect(); ops.push(x => { x.globalAlpha = orbAlpha; x.drawImage(orbCv, R0.left, R0.top - vTop, R0.width, R0.height); }); return; }
             ops.push(x => { x.save(); drawSvgVector(x, el, 0, vTop, k, op); x.restore(); x.setTransform(k, 0, 0, k, 0, 0); }); return; }
-          if (el.tagName === "IMG") { if (visible(r) && el.complete && el.naturalWidth && !/\.svg|svg\+xml/.test(el.currentSrc || el.src)) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
+          if (el.tagName === "IMG") { if (visible(r) && !this.safe) { const bm = loadImg(el.currentSrc || el.src); waits.push(bm); ops.push(async x => { const im = await bm; if (!im) return; x.globalAlpha = op; x.drawImage(im, r.left, r.top - vTop, r.width, r.height); }); } return; }
           if (el.tagName === "CANVAS") { if (visible(r) && el.width && el.height) ops.push(x => { x.globalAlpha = op; x.drawImage(el, r.left, r.top - vTop, r.width, r.height); }); return; }
           for (const ch of el.childNodes) { if (ch.nodeType === 3) { if (ch.nodeValue.trim()) textOps(ch, el, cs, op); } else if (ch.nodeType === 1) walk(ch); }
         };
@@ -1482,7 +1491,7 @@
         d.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99;margin:0;padding:6px 8px;font:10px/1.35 monospace;background:rgba(0,0,0,.72);color:#fff;border-radius:6px;pointer-events:none;max-width:calc(100% - 16px);white-space:pre-wrap";
         document.body.append(d);
         setInterval(() => { const b = navP.el.getBoundingClientRect();
-          d.textContent = `nav texture: ${navTxt.ready ? "ready" : "not ready"} · covers ${navTxt.covers(b)} · paper ${!!navTxt.hasPaper}\nredraws ${navTxt.n} · last ${navTxt.ms}ms · band ${navTxt.h}px · max tex ${navTxt.maxTex} · dpr ${devicePixelRatio}\nerror: ${navTxt.err || "none"}`; }, 400); }
+          d.textContent = `nav texture: ${navTxt.ready ? "ready" : "not ready"} · covers ${navTxt.covers(b)} · paper ${!!navTxt.hasPaper}\nredraws ${navTxt.n} · last ${navTxt.ms}ms · band ${navTxt.h}px · max tex ${navTxt.maxTex} · dpr ${devicePixelRatio}\nsafe mode ${!!navTxt.safe} · error: ${navTxt.err || "none"}`; }, 400); }
       const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
       const nav = navP.el.closest(".nav");
       new MutationObserver(re).observe(nav, { attributes: true, attributeFilter: ["class"] });
