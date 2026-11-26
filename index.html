@@ -1966,12 +1966,12 @@ if (mark) {
   // a crease cut at a region border is carried on to the next crease it meets (≤ .8), so it can still fold
   function mixDesign(parts) {
     const out = [];
-    for (const { lines, keep, ink = 1, k = 0, open = 1 } of parts) for (const L of lines) {
+    for (const { lines, keep, ink = 1, k = 0, open = 1, faint = false } of parts) for (const L of lines) {
       const n = 160, at = t => [L.a[0] + (L.b[0] - L.a[0]) * t, L.a[1] + (L.b[1] - L.a[1]) * t];
       let t0 = -1;
       for (let i = 0; i <= n + 1; i++) { const t = i / n, on = i <= n && keep(...at(t));
         if (on && t0 < 0) t0 = t; else if (!on && t0 >= 0) { const t1 = (i - 1) / n;
-          if (Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]) * (t1 - t0) > .1) out.push({ a: at(t0), b: at(t1), k: Math.max(L.k, k), ink: L.ink * ink, open, ca: t0 > 0, cb: t1 < 1 });
+          if (Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]) * (t1 - t0) > .1) out.push({ a: at(t0), b: at(t1), k: Math.max(L.k, k), ink: L.ink * ink, open, faint, ca: t0 > 0, cb: t1 < 1 });
           t0 = -1; } } }
     const hit = (p, d, skip) => { let best = .8;
       for (const M of out) { if (M === skip) continue; const ex = M.b[0] - M.a[0], ey = M.b[1] - M.a[1], den = d[0] * ey - d[1] * ex; if (Math.abs(den) < 1e-9) continue;
@@ -1979,7 +1979,7 @@ if (mark) {
       return best < .8 ? [p[0] + d[0] * best, p[1] + d[1] * best] : null; };
     for (const L of out) { const l = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]), d = [(L.b[0] - L.a[0]) / l, (L.b[1] - L.a[1]) / l];
       if (L.cb) { const q = hit(L.b, d, L); if (q) L.b = q; } if (L.ca) { const q = hit(L.a, [-d[0], -d[1]], L); if (q) L.a = q; } }
-    return out.map(({ a, b, k, ink, open }) => ({ a, b, k, ink, open }));
+    return out.map(({ a, b, k, ink, open, faint }) => ({ a, b, k, ink, open, faint }));
   }
   // regions, in sheet coordinates (x ±2, y ±1.55, y up). the mark: P x −.95…−.5, A −.35….33, C .5…1.36, letters y −.57….56
   const MIX = {
@@ -2006,7 +2006,7 @@ if (mark) {
     6: () => mixDesign([
       { lines: creaseDesign(19), keep: x => x > .45, open: 1.6 },
       { lines: designFolds(5), keep: (x, y) => x <= .45 && y > -.1 },
-      { lines: designFolds(5), keep: (x, y) => !(x <= .45 && y > -.1), ink: .25, k: .25 },
+      { lines: designFolds(5), keep: (x, y) => !(x <= .45 && y > -.1), ink: .25, k: .25, faint: true },
       { lines: designNetwork(41), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1, ink: .9 },
       { lines: designLetter(9), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1, ink: .7 },
       { lines: designNetwork(83, 420, .17, .42), keep: (x, y) => x <= -.9 && y <= -.1 }]) };
@@ -2080,9 +2080,9 @@ if (mark) {
     // which crease (if any) an edge lies on
     const creaseOf = V2 ? (u, v) => { for (const [l, t] of MEM[u]) for (const [m, q] of MEM[v]) if (l === m && Math.abs(t - q) < .13) return l; return -1; }
       : (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2 ? LN[u] : -1;
-    const CE = [], HC = [], HL = [];
+    const CE = [], HC = [], HL = [], HY = [];
     for (const e of em.values()) { E.push(e[0], e[1]); const l = creaseOf(e[0], e[1]); if (l >= 0) CE.push(e[0], e[1]);
-      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); HL.push(l); } }
+      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); HL.push(l); HY.push((Y[e[0]] + Y[e[1]]) / 2); } }
     // v2: plates = the facets between creases (triangles joined across non-crease edges). each is held flat and rigid
     // by shape matching (fit the best rotation of its flat shape to where its points are, pull them onto it). distance
     // hinges alone let the facets bend everywhere: the low-poly look
@@ -2150,16 +2150,22 @@ if (mark) {
       P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
     const edges = () => { for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
       P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
+    let openSheet = null;
     if (V2) {
       // v2: no blending positions toward flat (that stretched the facets: v1's low-poly left side). each crease keeps a
       // share of its fold, everything else is flat, and the sheet is solved to that, so facets are true flat plates
-      const hM = hd(O), tg = new Float32Array(NH);
-      for (let e = 0; e < NH; e++) tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hM[e])) * Math.min(1, V2.open * (lines[HL[e]].open || 1)) * (1 - HK[e] * .6) : LH[e];
-      // no crease stays folded past ~50° on the open sheet: deeper ones were tucks and flaps lying over the mark
-      for (let e = 0; e < NH; e++) tg[e] = Math.max(tg[e], LH[e] * .906);
-      // solved from the folded stage itself (not the relaxed one), so each crease keeps the direction it folded in; a
-      // weak pull toward the table plane lays the sheet down without flattening its creases
-      P.set(V2.from ? snaps[Math.floor(STAGES * V2.from)] : O); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); }
+      // band = optional [y from, y to, open, cap]: creases in that band of the sheet keep `open` of their fold, up to `cap`
+      // start / hS (the reworked ending): solve from that state instead, and in the bands take the folds it has
+      openSheet = (bands, start, hS) => { const hM = hd(O), tg = new Float32Array(NH);
+        for (let e = 0; e < NH; e++) { let op = V2.open * (HC[e] ? lines[HL[e]].open || 1 : 1), cap = .906, hm = hM[e];
+          for (const [y0, y1, o2, c2] of bands || []) { const w = Math.min(1, Math.max(0, Math.min(HY[e] - y0, y1 - HY[e]) / .2)); op += (o2 - op) * w; cap += (c2 - cap) * w; if (hS) hm += (hS[e] - hm) * w; }
+          tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hm)) * Math.min(1, op) * (1 - HK[e] * .6) : LH[e];
+          // no crease stays folded past ~50° on the open sheet: deeper ones were tucks and flaps lying over the mark
+          tg[e] = Math.max(tg[e], LH[e] * cap); }
+        // solved from the folded stage itself (not the relaxed one), so each crease keeps the direction it folded in; a
+        // weak pull toward the table plane lays the sheet down without flattening its creases
+        P.set(start || (V2.from ? snaps[Math.floor(STAGES * V2.from)] : O)); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); } };
+      openSheet();
     } else
     for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; }
     let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
@@ -2193,12 +2199,44 @@ if (mark) {
     path.push(OPEN);
     snaps.length = 0; for (let k = path.length - 1; k >= 0; k--) snaps.push(path[k]);   // [0] open … [last] ball
     const flat = new Float32Array(N * 2); for (let i = 0; i < N; i++) { flat[2 * i] = X[i]; flat[2 * i + 1] = Y[i]; }
+    // ---- the reworked ending (owner, Nov 26, on ?pac=6: the ball and the first four steps "perfect", the open sheet
+    // "shit"): the stages up to the 4th step stay exactly as they are; only the last six ease onto a new open sheet
+    // where (a) creases in bands of the sheet keep more or less of their fold (more crumple on top) and (b) a zone
+    // takes the ORIGINAL v1 open sheet's own shape: v1 is folded again here and its open sheet's displacement at each
+    // of our points is copied in, faded out at the zone's edge. time keeps the old spacing, so nothing before shifts
+    let spreadRef = null, vw = null;
+    if (V2 && V2.fin) { const F = V2.fin;
+      spreadRef = snaps.map(A => { let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += A[3 * i]; my += A[3 * i + 1]; mz += A[3 * i + 2]; } mx /= N; my /= N; mz /= N;
+        let s2 = 0; for (let i = 0; i < N; i++) s2 += (A[3 * i] - mx) ** 2 + (A[3 * i + 1] - my) ** 2 + (A[3 * i + 2] - mz) ** 2; return Math.sqrt(s2 / N); });
+      openSheet(); let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
+      const NEW = Float32Array.from(P); vw = new Float32Array(N);
+      // bands of the sheet that stay more crumpled: their points copied from a later (less open) stage of the same
+      // unfold, faded at the band's edge. [y from, y to, stage, amount]; stage -1 = laid flatter instead
+      for (const [y0, y1, k, a] of F.bands) { const S = snaps[Math.max(0, k)];
+        for (let v = 0; v < N; v++) { const w = a * Math.min(1, Math.max(0, Math.min(Y[v] - y0, y1 - Y[v]) / .25)); if (w <= 0) continue;
+          if (k < 0) NEW[3 * v + 2] *= 1 - w; else for (let d = 0; d < 3; d++) NEW[3 * v + d] += (S[3 * v + d] - NEW[3 * v + d]) * w; } }
+      if (F.ref) { const R = foldSheet(F.ref, SW, SH, STAGES, null), RO = R.snaps[0], rf = R.flat, rt = R.tris, RT = rt.length / 3;
+        const [x0, y0, y1, fz] = F.zone, GZ = .2, grid = new Map();   // v1's flat triangles, bucketed
+        for (let t = 0; t < RT; t++) { const xs = [0, 1, 2].map(c => rf[2 * rt[3 * t + c]]), ys = [0, 1, 2].map(c => rf[2 * rt[3 * t + c] + 1]);
+          for (let i = Math.floor(Math.min(...xs) / GZ); i <= Math.floor(Math.max(...xs) / GZ); i++) for (let j = Math.floor(Math.min(...ys) / GZ); j <= Math.floor(Math.max(...ys) / GZ); j++) { const k = i * 997 + j; (grid.get(k) || grid.set(k, []).get(k)).push(t); } }
+        for (let v = 0; v < N; v++) {
+          const w = Math.min(1, Math.max(0, (X[v] - x0) / fz)) * Math.min(1, Math.max(0, Math.min(Y[v] - y0, y1 - Y[v]) / fz)); if (w <= 0) continue;
+          let best = null, bd = -1e9;
+          for (const t of grid.get(Math.floor(X[v] / GZ) * 997 + Math.floor(Y[v] / GZ)) || []) { const a = rt[3 * t], b = rt[3 * t + 1], c = rt[3 * t + 2];
+            const ax = rf[2 * a], ay = rf[2 * a + 1], bx = rf[2 * b], by = rf[2 * b + 1], cx = rf[2 * c], cy = rf[2 * c + 1], den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            const l1 = ((by - cy) * (X[v] - cx) + (cx - bx) * (Y[v] - cy)) / den, l2 = ((cy - ay) * (X[v] - cx) + (ax - cx) * (Y[v] - cy)) / den, l3 = 1 - l1 - l2, m = Math.min(l1, l2, l3);
+            if (m > bd) { bd = m; best = [a, b, c, l1, l2, l3]; } }
+          if (!best) continue; const [a, b, c, l1, l2, l3] = best; vw[v] = w;
+          for (let d = 0; d < 3; d++) NEW[3 * v + d] += (RO[3 * a + d] * l1 + RO[3 * b + d] * l2 + RO[3 * c + d] * l3 - NEW[3 * v + d]) * w; } }
+      const ss = t => t * t * (3 - 2 * t), J = F.keep, OPEN0 = Float32Array.from(OPEN);   // snaps[0] is the open sheet; snaps[J] and beyond are untouched
+      for (let i = 0; i < J; i++) { const w = ss(Math.min(1, (J - i) / (J - F.full))), A = snaps[i]; for (let j = 0; j < A.length; j++) A[j] += (NEW[j] - OPEN0[j]) * w; }
+    }
     if (V2) console.log("pac plates", PL.length, "points", N);
-    return { flat, tris, snaps, creases: new Uint32Array(CE) };
+    return { flat, tris, snaps, creases: new Uint32Array(CE), spreadRef, vw };
   }
 
   // ---- the paper texture: grain, crease lines, the pecked PAC, a barely-ragged edge (alpha). 1024 × 794
-  function paperTexture(lines) {
+  function paperTexture(lines, skip) {
     const TW = 1024, TH = Math.round(TW * SH / SW), c = document.createElement("canvas"); c.width = TW; c.height = TH;
     const x = c.getContext("2d"), r = rng(11);
     // the edge: no tears (owner), just a fibre-rough cut a few pixels deep
@@ -2222,6 +2260,7 @@ if (mark) {
     for (const L of lines) { const [a0, a1] = tx(L.a), [b0, b1] = tx(L.b), len = Math.hypot(b0 - a0, b1 - a1), n = Math.ceil(len / 6);
       for (let i = 0; i < n; i++) { const u0 = i / n, u1 = (i + 1) / n, w = .5 + .5 * Math.sin(Math.PI * (u0 + u1) / 2);   // fades out at the ends
         const p0 = [a0 + (b0 - a0) * u0, a1 + (b1 - a1) * u0], p1 = [a0 + (b0 - a0) * u1, a1 + (b1 - a1) * u1];
+        if (skip && L.faint && skip(((p0[0] + p1[0]) / 2 / TW - .5) * SW, (.5 - (p0[1] + p1[1]) / 2 / TH) * SH)) { r(); continue; }   // same random sequence, so the mark's pecks stay identical
         x.strokeStyle = `rgba(70,45,25,${.2 * L.ink * w * (.7 + r() * .3)})`; x.lineWidth = .9 + L.ink * .5;
         x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.stroke();
         x.strokeStyle = `rgba(255,252,244,${.32 * L.ink * w})`; x.lineWidth = 1;
@@ -2256,17 +2295,22 @@ if (mark) {
     { design: () => designLetter(SEED || 9), fill: .13, open: .55, soft: .3, rigid: .15 },
     { design: MIX[4], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 },
     { design: MIX[5], fill: .13, open: 1, soft: .3, rigid: .15, from: .32 },
-    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 }];
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 },
+    // 7–9: 6 exactly up to its 4th step, then a new open sheet: zone = [x from, y from, y to, fade] copied from v1;
+    // bands = [y from, y to, stage copied, amount] (see foldSheet)
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.45, -.75, .85, .3], bands: [[.5, 2, 4, 1]], full: 4.2 } },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.45, -.75, .85, .3], bands: [[.55, 2, 3, 1], [-2, -.85, -1, .6]], full: 4.2 } },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.3, -1, .85, .35], bands: [[.35, 2, 5, 1], [-2, -.8, 3, 1]], full: 4.2 } }];
   const M = MODELS[+new URLSearchParams(location.search).get("pac") || 0] || null;
-  const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid, from: M.from || 0 };
-  const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines);
+  const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid, from: M.from || 0, fin: M.fin ? Object.assign({ ref: creaseDesign(19) }, M.fin) : null };
+  const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines);   // (skip, to leave lines out of the texture, is unused: the ball shows them too)
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
   const flatFallback = () => { cv.replaceWith(tex2d); tex2d.className = "pac3d flat"; mark.classList.add("ready"); };
   // the fold runs in a worker (a second or two of maths; on the main thread it stalled scrolling on phones)
   const folded = new Promise(res => {
     try {
       const w = new Worker(URL.createObjectURL(new Blob([`const foldSheet = ${foldSheet};
-        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES, e.data.V2); postMessage(o, [o.flat.buffer, o.tris.buffer, o.creases.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
+        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES, e.data.V2); postMessage(o, [o.flat.buffer, o.tris.buffer, o.creases.buffer, ...o.snaps.map(a => a.buffer)].concat(o.vw ? [o.vw.buffer] : [])); };`], { type: "text/javascript" })));
       w.onmessage = e => { res(e.data); w.terminate(); };
       w.onerror = () => { w.terminate(); res(foldSheet(lines, SW, SH, STAGES, V2)); };
       w.postMessage({ lines, SW, SH, STAGES, V2 });
@@ -2290,7 +2334,7 @@ if (mark) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial({ opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
-    const { flat, tris, snaps, creases } = await folded, N = flat.length / 2, T = tris.length / 3;
+    const { flat, tris, snaps, creases, spreadRef, vw } = await folded, N = flat.length / 2, T = tris.length / 3;
     // shading: each corner of each triangle gets its own normal, averaged over the triangles round that vertex that are
     // reachable WITHOUT crossing a crease line (its "wedge"). so a facet shades as one smooth sheet and only the crease
     // lines are hard edges. (flat shading lit every little triangle on its own: "vertices with normals that don't know
@@ -2331,7 +2375,7 @@ if (mark) {
     const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     // time runs evenly over how much the paper visibly changes (its spread), not over the recorded stages: the first
     // stages out of the ball barely change its size and held a still ball for a third of the animation
-    const spread = snaps.map(A => { let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += A[3 * i]; my += A[3 * i + 1]; mz += A[3 * i + 2]; } mx /= N; my /= N; mz /= N;
+    const spread = spreadRef || snaps.map(A => { let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += A[3 * i]; my += A[3 * i + 1]; mz += A[3 * i + 2]; } mx /= N; my /= N; mz /= N;
       let s2 = 0; for (let i = 0; i < N; i++) s2 += (A[3 * i] - mx) ** 2 + (A[3 * i + 1] - my) ** 2 + (A[3 * i + 2] - mz) ** 2; return Math.sqrt(s2 / N); });
     const cum = [0]; for (let k = 1; k < STAGES; k++) cum.push(cum[k - 1] + Math.abs(spread[k] - spread[k - 1]) + .015);
     const stageAt = c => { c *= cum[STAGES - 1]; let k = 0; while (k < STAGES - 2 && cum[k + 1] < c) k++; return k + Math.min(1, (c - cum[k]) / (cum[k + 1] - cum[k] || 1)); };
@@ -2348,13 +2392,16 @@ if (mark) {
       for (let t = 0; t < T; t++) { const l = Math.hypot(TN[3 * t], TN[3 * t + 1], TN[3 * t + 2]) || 1; TU[3 * t] = TN[3 * t] / l; TU[3 * t + 1] = TN[3 * t + 1] / l; TU[3 * t + 2] = TN[3 * t + 2] / l; }
       // inside a wedge, a neighbour counts less the more it's turned away: a fold of more than ~25° stays a hard edge even
       // off the crease lines (the ball is full of them), while the open sheet's gentle dents melt smooth
-      for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
+      // (only in the last stages, the ones that ease onto the new open sheet: the ball and the early steps shade as before)
+      const qs = vw && f < M.fin.keep ? (t => t * t * (3 - 2 * t))(1 - f / M.fin.keep) : 0;
+      // in the zone copied from v1, v1's own shading rule (blended by how much of v1 a point carries)
+      for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3, q = vw ? vw[tris[c]] * qs : 0; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
         for (let w = wStart[c]; w < wStart[c + 1]; w++) { const t = wl[w] * 3; if (t === s0) continue;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = M ? (d > .6 ? Math.min(1, (d - .6) / .2) : 0) : d > .9 ? (d - .9) / .1 : 0;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], w1 = d > .9 ? (d - .9) / .1 : 0, wt = M ? (d > .6 ? Math.min(1, (d - .6) / .2) : 0) * (1 - q) + w1 * q : w1;
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         // v2: across a crease the neighbours still count a little while the fold is gentle: a soft, paper-like crease
         if (M) for (let w = xStart[c]; w < xStart[c + 1]; w++) { const t = xl[w] * 3;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .75 ? M.soft * (d - .75) / .25 : 0;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .75 ? M.soft * (d - .75) / .25 * (1 - q) : 0;
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         const l = Math.hypot(x, y, z) || 1; n[3 * c] = x / l; n[3 * c + 1] = y / l; n[3 * c + 2] = z / l; }
       pos.needsUpdate = true; nor.needsUpdate = true; geo.computeBoundingSphere();
@@ -2370,6 +2417,7 @@ if (mark) {
     const go = t => { if (reduce) return; target = t; if (!raf && o !== t) { last = performance.now(); raf = requestAnimationFrame(step); } };
     size(); draw(); mark.classList.add("ready");
     mark.__pose = v => { o = target = v; draw(); };   // for dev/ screenshots
+    mark.__stage = v => stageAt(1 - v * v * (3 - 2 * v));
     if ("ResizeObserver" in window) new ResizeObserver(() => { size(); draw(); }).observe(mark);
 
     if (!reduce) {
