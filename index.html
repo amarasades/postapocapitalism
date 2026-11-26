@@ -2295,10 +2295,12 @@ if (mark) {
       x.beginPath(); x.ellipse(px + (rn() - .5) * size * 1.6, py + (rn() - .5) * size * 1.6, rr, rr * (.6 + rn() * .4), rn() * 3, 0, 7); if (!dry) x.fill(); } };
     x.fillStyle = "#3a2318";
     for (const pl of [[[112, 312], [110, 220], [113, 128]], [[113, 128], [160, 126], [184, 146], [182, 180], [156, 200], [111, 204]],
-      [[208, 312], [237, 220], [263, 126], [290, 222], [321, 312]], [[232, 248], [296, 244]], arc(420, 220, 70, 92, 38 * D, 322 * D, 18)]) peck(wobble(pl), 5.5, 6.2, bigP && pl[1][0] === 160);
+      [[208, 312], [237, 220], [263, 126], [290, 222], [321, 312]], [[232, 248], [296, 244]], arc(420, 220, 70, 92, 38 * D, 322 * D, 18)])
+      // live (owner, Nov 26): the P a touch further from the A, the C a touch closer
+      peck(wobble(bigP && pl[0][0] === 112 ? pl.map(([a, b]) => [a - 10, b]) : bigP && pl.length > 6 ? pl.map(([a, b]) => [a - 10, b]) : pl), 5.5, 6.2, bigP && pl[1][0] === 160);
     // owner, Nov 26: "make the circle of the P bigger" (6–9). the old bowl is pecked "dry" above, so the random
     // sequence, and so every other peck, stays exactly as it was
-    if (bigP) peck(wobble([[113, 128], [176, 122], [210, 148], [209, 196], [174, 224], [111, 228]]), 5.5, 6.2, false, rng(29));
+    if (bigP) peck(wobble([[103, 128], [166, 122], [200, 148], [199, 196], [164, 224], [101, 228]]), 5.5, 6.2, false, rng(29));
     const ring = []; for (let i = 0; i <= 200; i++) { const t = i / 200, a = Math.PI * .7 + t * Math.PI * 1.82; ring.push([266 + Math.cos(a) * 238, 218 + Math.sin(a) * 190 + Math.sin(t * 31) * 2]); }
     peck(ring, 6.5, 4.2);
     const sp = []; for (let i = 0; i <= 120; i++) { const t = i / 120, a = t * Math.PI * 2 * 2.6; sp.push([462 + Math.cos(a) * (3 + t * 34), 60 + Math.sin(a) * (3 + t * 30)]); }
@@ -2327,7 +2329,9 @@ if (mark) {
     { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.45, -.75, .7, .3] }) },
     { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.45, -.75, .6, .3], bands: [[.56, 2, 11, 0]] }) },
     { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.3, -1, .68, .35], bands: [[.64, 2, 8, 0], [-2, -.85, -1, .99]] }) }];
-  const M = MODELS[+new URLSearchParams(location.search).get("pac") || 0] || null;
+  // LIVE (owner, Nov 26): model 8. every other variant (and the ?pac= picker) lives on the archive branch
+  // pac-paper-variants, which must never be deleted
+  const M = MODELS[8];
   const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid, from: M.from || 0, fin: M.fin ? Object.assign({ ref: creaseDesign(19) }, M.fin) : null };
   const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines, null, M && M.bigP);   // (skip, to leave lines out of the texture, is unused: the ball shows them too)
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
