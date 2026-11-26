@@ -23,7 +23,7 @@ Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the o
 
 1. **Never draw SVG as an image** (`<img src=svg>`, `data:image/svg+xml`, `url()` svg backgrounds into a canvas) on the WebKit path. Safari silently drops, taints or mis-resolves it (missing filters, absolute `url(#id)`, unavailable fonts), and **desktop Chrome hides every one of those failures**, so "it works for me" in Playwright means nothing. Instead:
    - draw SVGs **shape by shape** with `drawSvgVector()` (getScreenCTM + computed fill/stroke/dash/opacity, page fonts for text);
-   - anything that needs an SVG filter (the "pa" stamp) is **baked to a PNG** (`dev/bake-stamp.js`);
+   - textures are drawn in a 2D canvas (the PAC paper, see §4.5);
    - SVG textures (the paper grain) are **generated** in canvas (`grainTile`).
 2. **A fix only counts if Chrome runs the same code path Safari runs.** If a fix depends on how Safari treats something Chrome treats differently, it isn't verified: restructure until the path is identical, then test.
 3. Don't tell the owner something is fixed on iPhone unless rule 2 holds. Say what's unverified.
@@ -80,7 +80,7 @@ Top to bottom:
    - **R3mesher:** a turning, tilted globe with 8 full meridian circles (all the way round, like the parallels) + 7 parallels. Every 10 s: rest 3 s, the parallels **halve** (every other one merges into its neighbour, 0.6 s), **hold** ~2.8 s, then **split back out** with a small overshoot; the meridians do the same 1.6 s later (8 circles → 4). Never collapse to a single line (owner: "what remesher reduces it to one line"). Readout follows the mesh: **FACES** = (8 + 8·meridian-spread) × (4 + 4·parallel-spread) → 128 / 64 / 32, **DENSITY** 100% / 50% / 25%. The white marker rides a real vertex (22.5°N, a parallel that never merges away), the front-facing one furthest right, with the leader line following it.
    - **Cad3t:** an L-bracket sketch extrudes into a wireframe solid (front solid, back dashed, extrusion edges), holds while it sways, then drops back. Readouts: EXTRUDE depth, SKETCH / EXTRUDING / SOLID. Placeholder copy; the owner hasn't described the product yet.
    - **Touch D3ck:** two **sharp** waves between the decks (a fine fast zig-zag, and a coarser alternating-spike zig-zag drifting the other way; never smooth, never in sync); platters turn only while live, Deck B at 45 s/rev and Deck A 5% faster (42.86 s). No BPM label.
-5. **`#transmission`:** a paper section with the melted "pa" stamp, now a **baked PNG** (`<img class="stamp">`, data URL, ~130 KB; source + bake script in `dev/bake-stamp.js`). Still wants a real hand-drawn version eventually.
+5. **`#transmission`:** the paper card. Its stamp is **PAC3D** (`<script type="module">` at the end): a real 3D sheet in **three.js** (r170, loaded from jsdelivr only when the letter is within 1200px). Closed it's a **crumpled paper ball**; hover (desktop, re-crumples 1.2 s after leaving), tap, or scrolling it into view (touch, re-balls once off screen) **unfolds** it into a torn, still-creased sheet with **PAC** pecked like a petroglyph in a broken ring with a spiral (Neolithic, after the collapse: owner, Nov 26). One 72×56 mesh, `flatShading`; each vertex has a flat spot (+ residual tent-fold creases) and a ball spot (direction = smooth random field over the sheet, so it wraps and folds; varying depth = solid wad). Texture (grain, mark, torn outline as alpha) is a 2D canvas, also the flat fallback without WebGL. `preserveDrawingBuffer` so NAVTEXT can copy it; renders only while moving. It's **PAC, not "pa"** (post-apocapitalism). The owner wanted real 3D, not 2D drawings.
 6. **`#log`:** data-log rows.
 7. **Footer:** status bar and credits (GeoJS and Open-Meteo attribution is required).
 
@@ -152,7 +152,7 @@ Failure mode: everything stays redacted ("Signal lost", ████, ··).
 6. **The "Scroll" hint collides with the planet labels** in the bottom-right on desktop since the solar system moved there.
 7. Very cool, slow-warming places (e.g. Ushuaia) still reach the 2131 clamp. Rare.
 8. Scratch relighting repaints ~600 small shapes, but only when the light has moved ≥2.5px (not every scroll frame).
-9. The "pa" stamp needs a real hand-drawn SVG.
+9. The PAC mark is procedural (pecked dots); the owner may want other Neolithic directions (ochre stencil, charcoal were shown, not picked).
 10. **The products are placeholders:** invented feature lists, all "In development", no contact address. More products are coming. Each must answer *"what part of the dead future does this cancel?"*
 11. The font is up for review.
 
