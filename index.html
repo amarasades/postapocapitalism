@@ -909,7 +909,14 @@
     }, { passive: true });
     document.documentElement.addEventListener("pointerleave", () => { if (hovering) { hovering = false; flip(); schedule(); } });
   } else {
-    tele.addEventListener("click", () => { flip(); schedule(); });
+    // judged against the panel's full rectangle too, like hover on desktop: the chip is clipped out of the inherited
+    // panel, so a tap on the crack landed on the page behind it and did nothing
+    document.addEventListener("click", e => {
+      const r = tele.getBoundingClientRect(), inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside && !tele.contains(e.target)) return;
+      if (!tele.contains(e.target) && e.target.closest && e.target.closest("a, button, input, select, textarea, label")) return;
+      flip(); schedule();
+    });
   }
   tele.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); schedule(); } });
 
