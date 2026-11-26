@@ -1932,14 +1932,14 @@ if (mark) {
   // B: a crumple network. creases are straight runs between junctions, like an unfolded paper ball: points scattered
   // over the sheet (and along its edge), joined by short straight creases into a planar web of polygons, some dropped
   // so facets aren't all triangles, and a few longer folds through it
-  function designNetwork(seed) {
+  function designNetwork(seed, count = 90, gap = .3, reach = .75) {
     const r = rng(seed), { out, add, full } = designKit(r), P = [];
-    for (let t = 0; t < 4000 && P.length < 90; t++) { const p = [(r() - .5) * SW * .94, (r() - .5) * SH * .94]; if (P.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > .3)) P.push(p); }
+    for (let t = 0; t < 4000 && P.length < count; t++) { const p = [(r() - .5) * SW * .94, (r() - .5) * SH * .94]; if (P.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > gap)) P.push(p); }
     const nb = P.length;
     for (let s = .35; s < SW; s += .35 + r() * .25) P.push([-SW / 2 + s, -SH / 2], [-SW / 2 + s, SH / 2]);
     for (let s = .35; s < SH; s += .35 + r() * .25) P.push([-SW / 2, -SH / 2 + s], [SW / 2, -SH / 2 + s]);
     const cand = [];
-    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) { if (i >= nb && j >= nb) continue; const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]); if (d < .75) cand.push([d, i, j]); }
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) { if (i >= nb && j >= nb) continue; const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]); if (d < reach) cand.push([d, i, j]); }
     cand.sort((a, b) => a[0] - b[0]);
     const S = [], cross = (a, b, c, d) => { const o = (p, q, s) => (q[0] - p[0]) * (s[1] - p[1]) - (q[1] - p[1]) * (s[0] - p[0]);
       return o(a, b, c) * o(a, b, d) < -1e-9 && o(c, d, a) * o(c, d, b) < -1e-9; };
@@ -1959,6 +1959,57 @@ if (mark) {
     for (let i = 0; i < 9; i++) full(pt(), r() * Math.PI, .02 + r() * .12, .35 + r() * .45);
     return out;
   }
+
+  // ---- the final mix (owner, Nov 26): one sheet stitched from the models by region. v1's right side (the "work of
+  // art"), long folds in the top-left, the crumple network and the folded letter's creases through the middle bottom and
+  // right under the A, extra little folds in the bottom-left. each part = a crease set + where on the sheet it's kept.
+  // a crease cut at a region border is carried on to the next crease it meets (≤ .8), so it can still fold
+  function mixDesign(parts) {
+    const out = [];
+    for (const { lines, keep, ink = 1, k = 0, open = 1 } of parts) for (const L of lines) {
+      const n = 160, at = t => [L.a[0] + (L.b[0] - L.a[0]) * t, L.a[1] + (L.b[1] - L.a[1]) * t];
+      let t0 = -1;
+      for (let i = 0; i <= n + 1; i++) { const t = i / n, on = i <= n && keep(...at(t));
+        if (on && t0 < 0) t0 = t; else if (!on && t0 >= 0) { const t1 = (i - 1) / n;
+          if (Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]) * (t1 - t0) > .1) out.push({ a: at(t0), b: at(t1), k: Math.max(L.k, k), ink: L.ink * ink, open, ca: t0 > 0, cb: t1 < 1 });
+          t0 = -1; } } }
+    const hit = (p, d, skip) => { let best = .8;
+      for (const M of out) { if (M === skip) continue; const ex = M.b[0] - M.a[0], ey = M.b[1] - M.a[1], den = d[0] * ey - d[1] * ex; if (Math.abs(den) < 1e-9) continue;
+        const fx = M.a[0] - p[0], fy = M.a[1] - p[1], t = (fx * ey - fy * ex) / den, u = (fx * d[1] - fy * d[0]) / den; if (t > .02 && t < best && u >= 0 && u <= 1) best = t; }
+      return best < .8 ? [p[0] + d[0] * best, p[1] + d[1] * best] : null; };
+    for (const L of out) { const l = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]), d = [(L.b[0] - L.a[0]) / l, (L.b[1] - L.a[1]) / l];
+      if (L.cb) { const q = hit(L.b, d, L); if (q) L.b = q; } if (L.ca) { const q = hit(L.a, [-d[0], -d[1]], L); if (q) L.a = q; } }
+    return out.map(({ a, b, k, ink, open }) => ({ a, b, k, ink, open }));
+  }
+  // regions, in sheet coordinates (x ±2, y ±1.55, y up). the mark: P x −.95…−.5, A −.35….33, C .5…1.36, letters y −.57….56
+  const MIX = {
+    // 4: the literal reading. hard borders: right of the C's left edge = v1; above the letters' middle = long folds;
+    // under that, between P and C = crumple network + the letter's creases; bottom-left corner = little folds
+    4: () => mixDesign([
+      { lines: creaseDesign(19), keep: x => x > .45, open: 1.6 },
+      { lines: designFolds(5), keep: (x, y) => x <= .45 && y > -.1 },
+      { lines: designNetwork(41), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1 },
+      { lines: designLetter(9), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1, ink: .8 },
+      { lines: designNetwork(83, 420, .17, .42), keep: (x, y) => x <= -.9 && y <= -.1 }]),
+    // 5: softer borders that follow the mark: v1 owns everything right of a slanted line through the A's right leg;
+    // long folds the top-left; the network fills only the band under the A and the bottom middle; the folded letter
+    // gives just its two long post folds across the middle bottom; the bottom-left gets striated little folds
+    5: () => mixDesign([
+      { lines: creaseDesign(19), keep: (x, y) => x > .25 + y * .2, open: 1.6 },
+      { lines: designFolds(5), keep: (x, y) => x <= .25 + y * .2 && y > .05 - (x + 2) * .12 },
+      { lines: designNetwork(41), keep: (x, y) => x <= .25 + y * .2 && x > -.6 && y <= -.45 },
+      { lines: designLetter(9).slice(0, 3), keep: (x, y) => x <= .25 + y * .2 && x > -1.1 && y < 0 },
+      { lines: designNetwork(83, 500, .15, .38), keep: (x, y) => x <= -.6 && y <= .05 - (x + 2) * .12 }]),
+    // 6: the ball first: long folds run over the WHOLE sheet as the skeleton (they made the best ball) but stay faint
+    // and stiffer outside the top-left, so v1's right side still reads as v1; network + letter under the A and in the
+    // middle bottom; little folds bottom-left
+    6: () => mixDesign([
+      { lines: creaseDesign(19), keep: x => x > .45, open: 1.6 },
+      { lines: designFolds(5), keep: (x, y) => x <= .45 && y > -.1 },
+      { lines: designFolds(5), keep: (x, y) => !(x <= .45 && y > -.1), ink: .25, k: .25 },
+      { lines: designNetwork(41), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1, ink: .9 },
+      { lines: designLetter(9), keep: (x, y) => x <= .45 && x > -.9 && y <= -.1, ink: .7 },
+      { lines: designNetwork(83, 420, .17, .42), keep: (x, y) => x <= -.9 && y <= -.1 }]) };
 
   // ---- the mesh along the creases, and the crumple. self-contained so it can run in a Worker
   function foldSheet(lines, SW, SH, STAGES, V2) {
@@ -2029,9 +2080,9 @@ if (mark) {
     // which crease (if any) an edge lies on
     const creaseOf = V2 ? (u, v) => { for (const [l, t] of MEM[u]) for (const [m, q] of MEM[v]) if (l === m && Math.abs(t - q) < .13) return l; return -1; }
       : (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2 ? LN[u] : -1;
-    const CE = [], HC = [];
+    const CE = [], HC = [], HL = [];
     for (const e of em.values()) { E.push(e[0], e[1]); const l = creaseOf(e[0], e[1]); if (l >= 0) CE.push(e[0], e[1]);
-      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); } }
+      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); HL.push(l); } }
     // v2: plates = the facets between creases (triangles joined across non-crease edges). each is held flat and rigid
     // by shape matching (fit the best rotation of its flat shape to where its points are, pull them onto it). distance
     // hinges alone let the facets bend everywhere: the low-poly look
@@ -2103,10 +2154,12 @@ if (mark) {
       // v2: no blending positions toward flat (that stretched the facets: v1's low-poly left side). each crease keeps a
       // share of its fold, everything else is flat, and the sheet is solved to that, so facets are true flat plates
       const hM = hd(O), tg = new Float32Array(NH);
-      for (let e = 0; e < NH; e++) tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hM[e])) * V2.open * (1 - HK[e] * .6) : LH[e];
+      for (let e = 0; e < NH; e++) tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hM[e])) * Math.min(1, V2.open * (lines[HL[e]].open || 1)) * (1 - HK[e] * .6) : LH[e];
+      // no crease stays folded past ~50° on the open sheet: deeper ones were tucks and flaps lying over the mark
+      for (let e = 0; e < NH; e++) tg[e] = Math.max(tg[e], LH[e] * .906);
       // solved from the folded stage itself (not the relaxed one), so each crease keeps the direction it folded in; a
       // weak pull toward the table plane lays the sheet down without flattening its creases
-      P.set(O); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); }
+      P.set(V2.from ? snaps[Math.floor(STAGES * V2.from)] : O); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); }
     } else
     for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; }
     let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
@@ -2200,9 +2253,12 @@ if (mark) {
   const MODELS = [null,
     { design: () => designFolds(SEED || 5), fill: .13, open: .55, soft: .3, rigid: .15 },
     { design: () => designNetwork(SEED || 41), fill: .13, open: .55, soft: .3, rigid: .15 },
-    { design: () => designLetter(SEED || 9), fill: .13, open: .55, soft: .3, rigid: .15 }];
+    { design: () => designLetter(SEED || 9), fill: .13, open: .55, soft: .3, rigid: .15 },
+    { design: MIX[4], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 },
+    { design: MIX[5], fill: .13, open: 1, soft: .3, rigid: .15, from: .32 },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 }];
   const M = MODELS[+new URLSearchParams(location.search).get("pac") || 0] || null;
-  const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid };
+  const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid, from: M.from || 0 };
   const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines);
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
   const flatFallback = () => { cv.replaceWith(tex2d); tex2d.className = "pac3d flat"; mark.classList.add("ready"); };
