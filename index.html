@@ -1904,8 +1904,64 @@ if (mark) {
     return out;
   }
 
+  // ---- three more crease models to compare (owner, Nov 26: v1 is "complete for now"; its right side, long straight
+  // creases between big calm facets, is the part they loved, its left side, lots of short creases and tiny facets, read
+  // as a low-poly model). picked with ?pac=1/2/3. what they share: every crease runs edge to edge or ends on another
+  // crease (a crease that stops in the middle of a facet can't fold, so the simulation bent the facet instead: that was
+  // the low-poly look), and the facets between creases stay flat (see foldSheet's v2)
+  function designKit(r) {
+    const hx = SW / 2, hy = SH / 2, out = [];
+    const clip = (a, b) => { let t0 = 0, t1 = 1; const dx = b[0] - a[0], dy = b[1] - a[1];
+      for (const [p, q] of [[-dx, a[0] + hx], [dx, hx - a[0]], [-dy, a[1] + hy], [dy, hy - a[1]]]) {
+        if (Math.abs(p) < 1e-9) { if (q < 0) return null; continue; } const t = q / p; if (p < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); }
+      return t0 < t1 ? [[a[0] + dx * t0, a[1] + dy * t0], [a[0] + dx * t1, a[1] + dy * t1]] : null; };
+    const add = (a, b, k, ink) => { const c = clip(a, b); if (c && Math.hypot(c[1][0] - c[0][0], c[1][1] - c[0][1]) > .1) out.push({ a: c[0], b: c[1], k, ink }); };
+    const ray = (p, ang, len) => [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len];
+    const pt = (m = .9) => [(r() - .5) * SW * m, (r() - .5) * SH * m];
+    const full = (p, a, k, ink) => add(ray(p, a, 6), ray(p, a + Math.PI, 6), k, ink);
+    return { out, add, ray, pt, full };
+  }
+  // A: long straight folds right across, at every angle, plus two striated bundles that also run edge to edge
+  function designFolds(seed) {
+    const r = rng(seed), { out, pt, full } = designKit(r);
+    for (let i = 0; i < 22; i++) full(pt(), r() * Math.PI, r() * .1, .35 + r() * .6);
+    for (let b = 0; b < 3; b++) { const p = pt(.6), a = r() * Math.PI, n = 3 + (r() * 2 | 0);
+      for (let i = 0; i < n; i++) { const o = (i - n / 2) * (.07 + r() * .03); full([p[0] - Math.sin(a) * o, p[1] + Math.cos(a) * o], a + (r() - .5) * .04, .12 + r() * .15, .25 + r() * .3); } }
+    return out;
+  }
+  // B: a crumple network. creases are straight runs between junctions, like an unfolded paper ball: points scattered
+  // over the sheet (and along its edge), joined by short straight creases into a planar web of polygons, some dropped
+  // so facets aren't all triangles, and a few longer folds through it
+  function designNetwork(seed) {
+    const r = rng(seed), { out, add, full } = designKit(r), P = [];
+    for (let t = 0; t < 4000 && P.length < 90; t++) { const p = [(r() - .5) * SW * .94, (r() - .5) * SH * .94]; if (P.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > .3)) P.push(p); }
+    const nb = P.length;
+    for (let s = .35; s < SW; s += .35 + r() * .25) P.push([-SW / 2 + s, -SH / 2], [-SW / 2 + s, SH / 2]);
+    for (let s = .35; s < SH; s += .35 + r() * .25) P.push([-SW / 2, -SH / 2 + s], [SW / 2, -SH / 2 + s]);
+    const cand = [];
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) { if (i >= nb && j >= nb) continue; const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]); if (d < .75) cand.push([d, i, j]); }
+    cand.sort((a, b) => a[0] - b[0]);
+    const S = [], cross = (a, b, c, d) => { const o = (p, q, s) => (q[0] - p[0]) * (s[1] - p[1]) - (q[1] - p[1]) * (s[0] - p[0]);
+      return o(a, b, c) * o(a, b, d) < -1e-9 && o(c, d, a) * o(c, d, b) < -1e-9; };
+    for (const [, i, j] of cand) if (!S.some(([u, v]) => u !== i && u !== j && v !== i && v !== j && cross(P[i], P[j], P[u], P[v]))) S.push([i, j]);
+    for (const [i, j] of S) if (r() > .22) add(P[i], P[j], .02 + r() * .2, .35 + r() * .55);
+    for (let i = 0; i < 3; i++) { const a = r() * Math.PI; full([(r() - .5) * 1.6, (r() - .5) * 1.2], a, r() * .05, .7 + r() * .3); }
+    return out;
+  }
+  // C: a letter that was folded to post it (in thirds, then in half), then crumpled: the post folds are the sharpest
+  // lines and open last; the crumple is a few hubs whose rays run to the edge, and some long folds
+  function designLetter(seed) {
+    const r = rng(seed), { out, ray, add, pt, full } = designKit(r);
+    full([0, -SH / 6 + (r() - .5) * .06], (r() - .5) * .02, 0, 1); full([0, SH / 6 + (r() - .5) * .06], (r() - .5) * .02, 0, 1);
+    full([(r() - .5) * .1, 0], Math.PI / 2 + (r() - .5) * .02, .01, .9);
+    for (let h = 0; h < 6; h++) { const p = pt(.8), n = 3 + (r() * 3 | 0), a0 = r() * 6.283;
+      for (let i = 0; i < n; i++) add(p, ray(p, a0 + i * 6.283 / n + (r() - .5) * .8, 6), .03 + r() * .12, .4 + r() * .4); }
+    for (let i = 0; i < 9; i++) full(pt(), r() * Math.PI, .02 + r() * .12, .35 + r() * .45);
+    return out;
+  }
+
   // ---- the mesh along the creases, and the crumple. self-contained so it can run in a Worker
-  function foldSheet(lines, SW, SH, STAGES) {
+  function foldSheet(lines, SW, SH, STAGES, V2) {
     const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
     const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
     const vnoise = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
@@ -1916,12 +1972,37 @@ if (mark) {
     const put = (x, y, l, ix, d) => { if (near(x, y, d)) return; const k = X.length; X.push(x); Y.push(y); LN.push(l); IX.push(ix);
       const key = Math.floor(x / GC) * 7919 + Math.floor(y / GC); (G.get(key) || G.set(key, []).get(key)).push(k); };
     const hx = SW / 2, hy = SH / 2;
+    // v2: a point can lie on several creases (crossings, junctions, a crease meeting the edge). MEM = [line, distance
+    // along it] for each. points close to an existing one merge into it (and add their crease to it), so crossing
+    // creases share their crossing point and both fold through it
+    const MEM = [];
+    const putM = (x, y, mem, d) => { const ci = Math.floor(x / GC), cj = Math.floor(y / GC); let best = -1, bd = d;
+      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (const k of G.get(i * 7919 + j) || []) { const dd = Math.hypot(X[k] - x, Y[k] - y); if (dd < bd) { bd = dd; best = k; } }
+      if (best >= 0) { if (mem) MEM[best].push(mem); return best; }
+      const k = X.length; X.push(x); Y.push(y); LN.push(-1); IX.push(0); MEM.push(mem ? [mem] : []);
+      const key = ci * 7919 + cj; (G.get(key) || G.set(key, []).get(key)).push(k); return k; };
+    if (V2) {
+      for (const [x, y] of [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]]) putM(x, y, null, .01);
+      for (let s = .075; s < SW; s += .075) { putM(-hx + s, -hy + r() * .004, null, .03); putM(-hx + s, hy - r() * .004, null, .03); }
+      for (let s = .075; s < SH; s += .075) { putM(-hx + r() * .004, -hy + s, null, .03); putM(hx - r() * .004, -hy + s, null, .03); }
+      const len = lines.map(L => Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]));
+      for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {   // crossings first
+        const A = lines[i], B = lines[j], dx = A.b[0] - A.a[0], dy = A.b[1] - A.a[1], ex = B.b[0] - B.a[0], ey = B.b[1] - B.a[1], den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-9) continue; const fx = B.a[0] - A.a[0], fy = B.a[1] - A.a[1], t = (fx * ey - fy * ex) / den, u = (fx * dy - fy * dx) / den;
+        if (t < -1e-6 || t > 1 + 1e-6 || u < -1e-6 || u > 1 + 1e-6) continue;
+        const k = putM(A.a[0] + dx * t, A.a[1] + dy * t, [i, t * len[i]], .03); MEM[k].push([j, u * len[j]]); }
+      lines.forEach((L, l) => { putM(L.a[0], L.a[1], [l, 0], .04); putM(L.b[0], L.b[1], [l, len[l]], .04); });
+      lines.forEach((L, l) => { const n = Math.max(2, Math.ceil(len[l] / .062));
+        for (let i = 1; i < n; i++) putM(L.a[0] + (L.b[0] - L.a[0]) * i / n, L.a[1] + (L.b[1] - L.a[1]) * i / n, [l, len[l] * i / n], .03); });
+      for (let t = 0; t < 9000; t++) putM((r() - .5) * (SW - .06), (r() - .5) * (SH - .06), null, V2.fill);
+    } else {
     for (const [x, y] of [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]]) put(x, y, -1, 0, .01);
     for (let s = .075; s < SW; s += .075) { put(-hx + s, -hy + r() * .004, -1, 0, .03); put(-hx + s, hy - r() * .004, -1, 0, .03); }
     for (let s = .075; s < SH; s += .075) { put(-hx + r() * .004, -hy + s, -1, 0, .03); put(hx - r() * .004, -hy + s, -1, 0, .03); }
     lines.forEach((L, l) => { const len = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]), n = Math.max(2, Math.ceil(len / .062));
       for (let i = 0; i <= n; i++) put(L.a[0] + (L.b[0] - L.a[0]) * i / n, L.a[1] + (L.b[1] - L.a[1]) * i / n, l, i, .03); });
     for (let t = 0; t < 9000; t++) put((r() - .5) * (SW - .06), (r() - .5) * (SH - .06), -2, 0, .15);
+    }
     const N = X.length;
     // Delaunay (Bowyer–Watson), with a super-triangle
     const PX = X.concat([0, -40, 40]), PY = Y.concat([40, -30, -30]);
@@ -1945,9 +2026,31 @@ if (mark) {
     for (let i = 0; i < T.length; i++) { const a = tris[3 * i], b = tris[3 * i + 1], c = tris[3 * i + 2];
       for (const [u, v, w] of [[a, b, c], [b, c, a], [c, a, b]]) { const k = u < v ? u * 1e5 + v : v * 1e5 + u; const e = em.get(k); if (e) e.push(w); else em.set(k, [u, v, w]); } }
     const E = [], H = [], HK = [];
-    const crease = (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2;
-    const CE = [];
-    for (const e of em.values()) { E.push(e[0], e[1]); if (crease(e[0], e[1])) CE.push(e[0], e[1]); if (e.length === 4) { H.push(e[2], e[3]); HK.push(crease(e[0], e[1]) ? lines[LN[e[0]]].k : 1); } }
+    // which crease (if any) an edge lies on
+    const creaseOf = V2 ? (u, v) => { for (const [l, t] of MEM[u]) for (const [m, q] of MEM[v]) if (l === m && Math.abs(t - q) < .13) return l; return -1; }
+      : (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2 ? LN[u] : -1;
+    const CE = [], HC = [];
+    for (const e of em.values()) { E.push(e[0], e[1]); const l = creaseOf(e[0], e[1]); if (l >= 0) CE.push(e[0], e[1]);
+      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); } }
+    // v2: plates = the facets between creases (triangles joined across non-crease edges). each is held flat and rigid
+    // by shape matching (fit the best rotation of its flat shape to where its points are, pull them onto it). distance
+    // hinges alone let the facets bend everywhere: the low-poly look
+    const PL = [];
+    if (V2) { const par = new Int32Array(T.length).map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i])), te = new Map();
+      for (let i = 0; i < T.length; i++) for (let c = 0; c < 3; c++) { const u = tris[3 * i + c], v = tris[3 * i + (c + 1) % 3], k = u < v ? u * 1e5 + v : v * 1e5 + u; if (te.has(k)) { if (creaseOf(u, v) < 0) par[find(i)] = find(te.get(k)); } else te.set(k, i); }
+      const g = new Map(); for (let i = 0; i < T.length; i++) { const f = find(i); (g.get(f) || g.set(f, new Set()).get(f)); for (let c = 0; c < 3; c++) g.get(f).add(tris[3 * i + c]); }
+      for (const set of g.values()) { const v = Int32Array.from(set); let cx = 0, cy = 0; for (const i of v) { cx += X[i]; cy += Y[i]; } cx /= v.length; cy /= v.length;
+        PL.push({ v, qx: Float32Array.from(v, i => X[i] - cx), qy: Float32Array.from(v, i => Y[i] - cy) }); } }
+    const plates = w => { for (const { v, qx, qy } of PL) { const n = v.length; let cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < n; i++) { cx += P[3 * v[i]]; cy += P[3 * v[i] + 1]; cz += P[3 * v[i] + 2]; } cx /= n; cy /= n; cz /= n;
+        let ax = 0, ay = 0, az = 0, bx = 0, by = 0, bz = 0;   // A = Σ (p - c) [qx qy]: a 3×2 matrix, columns a, b
+        for (let i = 0; i < n; i++) { const j = 3 * v[i], px = P[j] - cx, py = P[j + 1] - cy, pz = P[j + 2] - cz; ax += px * qx[i]; ay += py * qx[i]; az += pz * qx[i]; bx += px * qy[i]; by += py * qy[i]; bz += pz * qy[i]; }
+        // rotation = A (AᵀA)^-½, with the 2×2 square root in closed form
+        const m11 = ax * ax + ay * ay + az * az, m12 = ax * bx + ay * by + az * bz, m22 = bx * bx + by * by + bz * bz, sd = Math.sqrt(Math.max(1e-12, m11 * m22 - m12 * m12)), st = Math.sqrt(m11 + m22 + 2 * sd);
+        if (st < 1e-9) continue; const s11 = (m11 + sd) / st, s12 = m12 / st, s22 = (m22 + sd) / st, dt = s11 * s22 - s12 * s12; if (Math.abs(dt) < 1e-12) continue;
+        const i11 = s22 / dt, i12 = -s12 / dt, i22 = s11 / dt;
+        const r1x = ax * i11 + bx * i12, r1y = ay * i11 + by * i12, r1z = az * i11 + bz * i12, r2x = ax * i12 + bx * i22, r2y = ay * i12 + by * i22, r2z = az * i12 + bz * i22;
+        for (let i = 0; i < n; i++) { const j = 3 * v[i]; P[j] += (cx + r1x * qx[i] + r2x * qy[i] - P[j]) * w; P[j + 1] += (cy + r1y * qx[i] + r2y * qy[i] - P[j + 1]) * w; P[j + 2] += (cz + r1z * qx[i] + r2z * qy[i] - P[j + 2]) * w; } } };
     const rest = (A, n) => { const L = new Float32Array(n); for (let i = 0; i < n; i++) L[i] = Math.hypot(X[A[2 * i]] - X[A[2 * i + 1]], Y[A[2 * i]] - Y[A[2 * i + 1]]); return L; };
     const NE = E.length / 2, NH = H.length / 2, LE = rest(E, NE), LH = rest(H, NH);
     const P = new Float32Array(N * 3); for (let i = 0; i < N; i++) { P[3 * i] = X[i]; P[3 * i + 1] = Y[i]; }
@@ -1978,7 +2081,7 @@ if (mark) {
       for (let it = 0; it < 40; it++) {
         for (let i = 0; i < N; i++) { const j = 3 * i, x = (P[j] - ox) / sx, y = (P[j + 1] - oy) / sy, z = (P[j + 2] + R) / sz, d = Math.hypot(x, y, z);
           if (d > R) { const k = 1 - (1 - R / d) * .5; P[j] = x * k * sx + ox; P[j + 1] = y * k * sy + oy; P[j + 2] = z * k * sz - R; } }
-        solve(); solve(); solve(); if (it % 3 === 2) repel();
+        solve(); solve(); solve(); if (V2) plates(V2.rigid); if (it % 3 === 2) repel();
       }
       let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += P[3 * i]; my += P[3 * i + 1]; mz += P[3 * i + 2]; }
       mx /= N; my /= N; mz /= N; const Q = Float32Array.from(P); for (let i = 0; i < N; i++) { Q[3 * i] -= mx * t; Q[3 * i + 1] -= my * t; Q[3 * i + 2] -= mz * t; }
@@ -1990,24 +2093,42 @@ if (mark) {
     for (let it = 0; it < 18; it++) { const pull = .1;
       for (let i = 0; i < N; i++) { P[3 * i] += (X[i] - P[3 * i]) * pull; P[3 * i + 1] += (Y[i] - P[3 * i + 1]) * pull; P[3 * i + 2] *= 1 - pull * 1.2; }
       solve(); }
-    let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N;
-    for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; P[3 * i + 2] -= zm; }
+    const hd = A => { const o = new Float32Array(NH); for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3; o[e] = Math.hypot(A[b] - A[a], A[b + 1] - A[a + 1], A[b + 2] - A[a + 2]); } return o; };
+    // hinge pass: every hinge to its target distance (both ways), weight w
+    const hinge = (tg, w) => { for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - tg[e]) / d * .5 * w;
+      P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
+    const edges = () => { for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
+      P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
+    if (V2) {
+      // v2: no blending positions toward flat (that stretched the facets: v1's low-poly left side). each crease keeps a
+      // share of its fold, everything else is flat, and the sheet is solved to that, so facets are true flat plates
+      const hM = hd(O), tg = new Float32Array(NH);
+      for (let e = 0; e < NH; e++) tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hM[e])) * V2.open * (1 - HK[e] * .6) : LH[e];
+      // solved from the folded stage itself (not the relaxed one), so each crease keeps the direction it folded in; a
+      // weak pull toward the table plane lays the sheet down without flattening its creases
+      P.set(O); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); }
+    } else
+    for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; }
+    let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
     const OPEN = Float32Array.from(P), BALL = snaps[snaps.length - 1];
     // the path between them is NOT the squeeze played backwards (that was a puffy pillow mid-way: the sheet wrapped on a
     // big sphere). it's every fold opening at once: the distance across every hinge goes from its value in the ball to
     // its value in the open sheet, edges stay inextensible, layers push apart. so mid-way it's the same sheet, still
     // folded along the same lines, just less. the last stages ease it onto the open sheet exactly
-    const hd = A => { const o = new Float32Array(NH); for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3; o[e] = Math.hypot(A[b] - A[a], A[b + 1] - A[a + 1], A[b + 2] - A[a + 2]); } return o; };
     const hB = hd(BALL), hO = hd(OPEN), tgt = new Float32Array(NH), path = [Float32Array.from(BALL)];
     P.set(BALL);
     for (let k = 1; k < STAGES - 1; k++) {
       const sk = k / (STAGES - 1);
       const g = 1 - Math.pow(1 - sk, 2.6); for (let e = 0; e < NH; e++) tgt[e] = hB[e] + (hO[e] - hB[e]) * g;
+      // v2: folds the squeeze forced OFF the crease lines open first and fast, so mid-way the paper is flat plates
+      // hinged on its creases, not a bent mesh
+      if (V2) { const g2 = 1 - Math.pow(1 - sk, 7); for (let e = 0; e < NH; e++) if (!HC[e]) tgt[e] = hB[e] + (hO[e] - hB[e]) * g2; }
       for (let it = 0; it < 36; it++) {
         for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
           P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; }
         for (let e = 0; e < NH; e++) { const a = H[2 * e] * 3, b = H[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - tgt[e]) / d * .5;
           P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; }
+        if (V2) plates(Math.min(1, .2 + sk * 3));
         if (it % 3 === 2) repel();
         const w = .06 * Math.pow(sk, 3);   // drift toward where the open sheet lies, more and more
         if (w > 0) for (let i = 0; i < P.length; i++) P[i] += (OPEN[i] - P[i]) * w;
@@ -2019,6 +2140,7 @@ if (mark) {
     path.push(OPEN);
     snaps.length = 0; for (let k = path.length - 1; k >= 0; k--) snaps.push(path[k]);   // [0] open … [last] ball
     const flat = new Float32Array(N * 2); for (let i = 0; i < N; i++) { flat[2 * i] = X[i]; flat[2 * i + 1] = Y[i]; }
+    if (V2) console.log("pac plates", PL.length, "points", N);
     return { flat, tris, snaps, creases: new Uint32Array(CE) };
   }
 
@@ -2071,18 +2193,28 @@ if (mark) {
     return c;
   }
 
-  const lines = creaseDesign(19), tex2d = paperTexture(lines);
+  // ?pac=1/2/3 picks a crease model to compare (see designFolds); no parameter = v1, the approved one. v2 knobs: fill =
+  // spacing of the mesh between creases, open = how much of its fold each crease keeps on the open sheet, soft = how far
+  // a crease's shading rounds over (paper isn't razor sharp), and how smooth a facet's own slight bends shade
+  const SEED = +new URLSearchParams(location.search).get("seed");   // &seed=N tries another layout of the same model
+  const MODELS = [null,
+    { design: () => designFolds(SEED || 5), fill: .13, open: .55, soft: .3, rigid: .15 },
+    { design: () => designNetwork(SEED || 41), fill: .13, open: .55, soft: .3, rigid: .15 },
+    { design: () => designLetter(SEED || 9), fill: .13, open: .55, soft: .3, rigid: .15 }];
+  const M = MODELS[+new URLSearchParams(location.search).get("pac") || 0] || null;
+  const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid };
+  const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines);
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
   const flatFallback = () => { cv.replaceWith(tex2d); tex2d.className = "pac3d flat"; mark.classList.add("ready"); };
   // the fold runs in a worker (a second or two of maths; on the main thread it stalled scrolling on phones)
   const folded = new Promise(res => {
     try {
       const w = new Worker(URL.createObjectURL(new Blob([`const foldSheet = ${foldSheet};
-        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES); postMessage(o, [o.flat.buffer, o.tris.buffer, o.creases.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
+        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES, e.data.V2); postMessage(o, [o.flat.buffer, o.tris.buffer, o.creases.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
       w.onmessage = e => { res(e.data); w.terminate(); };
-      w.onerror = () => { w.terminate(); res(foldSheet(lines, SW, SH, STAGES)); };
-      w.postMessage({ lines, SW, SH, STAGES });
-    } catch (e) { res(foldSheet(lines, SW, SH, STAGES)); }
+      w.onerror = () => { w.terminate(); res(foldSheet(lines, SW, SH, STAGES, V2)); };
+      w.postMessage({ lines, SW, SH, STAGES, V2 });
+    } catch (e) { res(foldSheet(lines, SW, SH, STAGES, V2)); }
   });
 
   const start = async () => {
@@ -2112,7 +2244,8 @@ if (mark) {
     const inc = Array.from({ length: N }, () => []);
     for (let t = 0; t < T; t++) for (let c = 0; c < 3; c++) inc[tris[3 * t + c]].push(t);
     const wStart = new Int32Array(3 * T + 1), wList = [];
-    { const corner = new Map();
+    const xStart = new Int32Array(3 * T + 1), xList = [];
+    { const corner = new Map(), across = new Map();
       for (let v = 0; v < N; v++) {
         const ts = inc[v], par = ts.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
         for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
@@ -2121,11 +2254,11 @@ if (mark) {
           if (w >= 0 && !isCrease.has(ck(v, w))) par[find(i)] = find(j);
         }
         const groups = new Map(); ts.forEach((t, i) => { const g = find(i); (groups.get(g) || groups.set(g, []).get(g)).push(t); });
-        for (const g of groups.values()) for (const t of g) corner.set(3 * t + tris.slice(3 * t, 3 * t + 3).indexOf(v), g);
+        for (const g of groups.values()) for (const t of g) { const c = 3 * t + tris.slice(3 * t, 3 * t + 3).indexOf(v); corner.set(c, g); across.set(c, ts.filter(u => !g.includes(u))); }
       }
-      for (let c = 0; c < 3 * T; c++) { wStart[c] = wList.length; wList.push(...corner.get(c)); }
-      wStart[3 * T] = wList.length; }
-    const wl = Int32Array.from(wList);
+      for (let c = 0; c < 3 * T; c++) { wStart[c] = wList.length; wList.push(...corner.get(c)); xStart[c] = xList.length; xList.push(...across.get(c)); }
+      wStart[3 * T] = wList.length; xStart[3 * T] = xList.length; }
+    const wl = Int32Array.from(wList), xl = Int32Array.from(xList);
     const geo = new THREE.BufferGeometry(), uv = new Float32Array(T * 6);
     for (let c = 0; c < 3 * T; c++) { const v = tris[c]; uv[2 * c] = flat[2 * v] / SW + .5; uv[2 * c + 1] = flat[2 * v + 1] / SH + .5; }
     const pos = new THREE.BufferAttribute(new Float32Array(T * 9), 3), nor = new THREE.BufferAttribute(new Float32Array(T * 9), 3);
@@ -2161,7 +2294,11 @@ if (mark) {
       // off the crease lines (the ball is full of them), while the open sheet's gentle dents melt smooth
       for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
         for (let w = wStart[c]; w < wStart[c + 1]; w++) { const t = wl[w] * 3; if (t === s0) continue;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .9 ? (d - .9) / .1 : 0;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = M ? (d > .6 ? Math.min(1, (d - .6) / .2) : 0) : d > .9 ? (d - .9) / .1 : 0;
+          x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
+        // v2: across a crease the neighbours still count a little while the fold is gentle: a soft, paper-like crease
+        if (M) for (let w = xStart[c]; w < xStart[c + 1]; w++) { const t = xl[w] * 3;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .75 ? M.soft * (d - .75) / .25 : 0;
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         const l = Math.hypot(x, y, z) || 1; n[3 * c] = x / l; n[3 * c + 1] = y / l; n[3 * c + 2] = z / l; }
       pos.needsUpdate = true; nor.needsUpdate = true; geo.computeBoundingSphere();
