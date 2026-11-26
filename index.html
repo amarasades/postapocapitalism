@@ -84,7 +84,8 @@
   .bar .id { padding-right: 14px; border-right: 1px solid var(--ink-line); color: var(--ink-dim); }
   .bar .sp { flex: 1; }
   /* status lights: steady by default ("Signal live"); .live pulses (a module that's out), .dev is a dim, steady light (still being built) */
-  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--light); box-shadow: 0 0 8px var(--light); vertical-align: middle; margin-right: 7px; position: relative; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--light); box-shadow: 0 0 8px var(--light); vertical-align: middle; margin-right: 7px; position: relative; top: -.12em; } /* middle = x-height centre; the caps' centre is .12em higher (measured: 1.3px at 11px) */
+  .dot.live { margin-right: 9px; } /* owner: Live's light 2px further left */
   .dot.live { animation: pulse 1.8s ease-in-out infinite; }
   .dot.live::after { content: ""; position: absolute; inset: -1px; border-radius: 50%; border: 1px solid var(--light); animation: ripple 1.8s ease-out infinite; }
   .dot.dev { background: rgba(255, 243, 224, .5); box-shadow: inset 0 0 0 1px var(--ink-line); }
@@ -247,6 +248,14 @@
   .paper .lbl { display: block; margin-bottom: 18px; color: rgba(42,29,20,.6); }
   .paper h2 { font-size: clamp(38px, 5.2vw, 72px); }
   .paper p { margin-top: 20px; font-size: 18px; max-width: 44ch; color: rgba(42,29,20,.8); }
+  /* ?desk=1/2/3: the card is a desk seen from above (image set by the desk script); light ink on the dark desks */
+  .paper.desk { background-color: #2a1a10; border-color: rgba(0,0,0,.35); box-shadow: 0 30px 60px -26px rgba(40,12,2,.75); background-repeat: no-repeat; }
+  .paper.desk-2 { background-color: #22332a; }
+  .paper.desk-3 { background-color: #9a958e; border-color: rgba(255,250,240,.35); }
+  .paper.desk-1, .paper.desk-2 { color: #f4e9da; }
+  .paper.desk-1 p, .paper.desk-2 p { color: rgba(244,233,218,.82); }
+  .paper.desk-1 .lbl, .paper.desk-2 .lbl { color: rgba(244,233,218,.58); }
+  .paper.desk-3 p { color: rgba(30,24,18,.84); }
 
   /* ---------- log ---------- */
   .log { --r: 18px; }
@@ -437,7 +446,7 @@
           </div>
           <div class="mod-body">
             <span class="kind hud">Remesher</span><h3>R3mesher<span class="beta hud">Beta</span></h3>
-            <p>Turn messy scans and sculpts into clean, usable topology, so things get made and repaired instead of binned.</p>
+            <p>Turn mess into mesh, so things get made and repaired instead of binned.</p>
           </div>
         </article>
 
@@ -467,7 +476,7 @@
           </div>
           <div class="mod-body">
             <span class="kind hud">CAD</span><h3>Cad3t<span class="beta hud">Beta</span></h3>
-            <p>Full CAD. Draw the spare part instead of buying the whole machine again.</p>
+            <p>Full CAD, from the cabinet to the circuit board inside it, ready for the CNC. Draw the spare part instead of buying the whole machine again.</p>
           </div>
         </article>
 
@@ -488,7 +497,7 @@
           </div>
           <div class="mod-body">
             <span class="kind hud">Touchscreen DJ</span><h3>Touch D3ck</h3>
-            <p>DJ software built for the touchscreen first, not a laptop layout squeezed onto glass. No fake platters eating half the screen: the space goes to the music.</p>
+            <p>DJ software built for the touchscreen, not squeezed onto it. Nothing eats half the screen. The space goes to the music.</p>
           </div>
         </article>
 
@@ -525,7 +534,7 @@
         <div>
           <span class="hud lbl">Transmission 02 // partial</span>
           <h2>We've seen how this ends.</h2>
-          <p>So we're building the tools that change it: software that wastes less, lasts longer, and keeps culture alive.</p>
+          <p>So we're building the tools that change it. Waste less, last longer, and keep culture alive.</p>
           <p>Not because we're nice. Because we have to live here later.</p>
         </div>
       </div>
@@ -1497,7 +1506,8 @@
                 const tile = await image;
                 const pat = x.createPattern(tile || grainTile, "repeat");
                 if (!pat) return;
-                pat.setTransform?.(new DOMMatrix().translate(X + el.clientLeft, Y + el.clientTop));
+                const bs = /^([\d.]+)px ([\d.]+)px$/.exec(cs.backgroundSize);   // a single sized layer (the ?desk= image)
+                pat.setTransform?.(new DOMMatrix().translate(X + el.clientLeft, Y + el.clientTop).scale(bs && tile ? +bs[1] / tile.width : 1, bs && tile ? +bs[2] / tile.height : 1));
                 x.globalAlpha = op; x.fillStyle = pat; x.fill(path);
               });
             }
@@ -1848,6 +1858,112 @@
   })();
 
   build(); resolve();
+})();
+</script>
+<script>
+// ?desk=1/2/3 (owner, Nov 26): the transmission seen from above, lying on a desk, like an overhead shot in a film.
+// the paper card's background becomes the desk; the crumpled sheet is the only paper. comparison only: no parameter = the
+// paper card as approved. each desk is one image baked in a 2D canvas at the card's size (lamp pool and vignette baked in),
+// set as the card's ONLY background layer with an explicit background-size, so the Safari nav redraw copies it as is.
+(() => {
+  const DESK = +new URLSearchParams(location.search).get("desk");
+  if (!(DESK >= 1 && DESK <= 3)) return;
+  const card = document.querySelector(".paper"); if (!card) return;
+  card.classList.add("desk", "desk-" + DESK);
+  const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
+  const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
+  const vn = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j, c), b = hash(i + 1, j, c), d = hash(i, j + 1, c), e = hash(i + 1, j + 1, c); return a + (b - a) * sx + (d - a) * sy + (a - b - d + e) * sx * sy; };
+  const fbm = (x, y, c, o = 4) => { let v = 0, a = .5, f = 1; for (let k = 0; k < o; k++) { v += vn(x * f, y * f, c + k) * a; a *= .5; f *= 2.03; } return v; };
+  const mix = (a, b, t) => a + (b - a) * t;
+
+  // per-pixel base, at reduced resolution for speed (s = css px per sample), drawn up smoothly
+  const field = (W, H, s, fn) => { const w = Math.ceil(W / s), h = Math.ceil(H / s), c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d"), im = g.createImageData(w, h), d = im.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = (y * w + x) * 4, p = fn(x * s, y * s); d[o] = p[0]; d[o + 1] = p[1]; d[o + 2] = p[2]; d[o + 3] = 255; }
+    g.putImageData(im, 0, 0); return c; };
+
+  const DESKS = {
+    // 1. walnut, lamp-lit. planks run across the card, the grain flows round slow knots
+    1: (x, W, H, k) => {
+      const plank = H / 2.3, r = rng(7);
+      x.drawImage(field(W, H, 1 / k, (px, py) => {   // sampled at device pixels: the grain is fine, upscaling smeared it
+        const pi = Math.floor((py + plank * .35) / plank), yy = py + pi * 913.7;
+        const warp = fbm(px / 520 + pi * 3, yy / 110, 3) * 60 + fbm(px / 90, yy / 30, 23, 2) * 4;
+        const ring = (yy + warp) / (9 + (pi % 2) * 3), f = ring - Math.floor(ring);
+        const late = Math.pow(1 - Math.abs(f - .82) / .82, 9) * .7 + Math.pow(f, 3) * .25;   // a dark latewood line, ramping in
+        const pore = vn(px / 3.2, yy * .9, 13) * .5 + vn(px / 11, yy * .6, 14) * .5;          // open pores: short streaks along the grain
+        const t = Math.min(1, Math.max(0, .62 - late * .55 + pore * .14 + fbm(px / 800, yy / 200, 21) * .3));
+        return [mix(30, 118, t), mix(16, 70, t), mix(9, 40, t)];
+      }), 0, 0, W, H);
+      // plank seams: a dark gap with a lit lip below it
+      for (let yy = plank * .65; yy < H; yy += plank) { x.fillStyle = "rgba(10,4,1,.55)"; x.fillRect(0, yy - 1, W, 1.6); x.fillStyle = "rgba(255,210,160,.08)"; x.fillRect(0, yy + .8, W, 1); }
+      // a few fine scratches in the finish
+      x.lineCap = "round";
+      for (let i = 0; i < 70; i++) { const px = r() * W, py = r() * H, a = (r() - .5) * .5, L = 20 + r() * 90; x.strokeStyle = `rgba(255,220,180,${.03 + r() * .05})`; x.lineWidth = .6;
+        x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L); x.stroke(); }
+      return { lamp: [.24, .2, "rgba(255,196,128,.34)", 1.05], vig: "rgba(8,3,1,.62)" };
+    },
+    // 2. self-healing cutting mat (dark green), the maker's desk: 1 cm grid, bolder every 5, 45° guides, rulers, knife cuts
+    2: (x, W, H, k) => {
+      const r = rng(19);
+      x.drawImage(field(W, H, 2, (px, py) => { const m = fbm(px / 300, py / 300, 5) * .5 + fbm(px / 18, py / 18, 8, 2) * .18; return [33 + m * 18, 52 + m * 22, 44 + m * 18]; }), 0, 0, W, H);
+      const cm = Math.max(20, Math.min(30, W / 48)), ox = cm * 1.6, oy = cm * 1.6;
+      x.save(); x.beginPath(); x.rect(ox, oy, W - ox * 2, H - oy * 2); x.clip();
+      for (let i = 0; ox + i * cm < W; i++) { const b = i % 5 === 0; x.fillStyle = `rgba(214,236,214,${b ? .3 : .13})`; x.fillRect(ox + i * cm - (b ? .6 : .4), 0, b ? 1.2 : .8, H); }
+      for (let j = 0; oy + j * cm < H; j++) { const b = j % 5 === 0; x.fillStyle = `rgba(214,236,214,${b ? .3 : .13})`; x.fillRect(0, oy + j * cm - (b ? .6 : .4), W, b ? 1.2 : .8); }
+      x.strokeStyle = "rgba(214,236,214,.11)"; x.lineWidth = .8;
+      for (let d = -H; d < W; d += cm * 10) { x.beginPath(); x.moveTo(ox + d, oy); x.lineTo(ox + d + H, oy + H); x.stroke(); x.beginPath(); x.moveTo(W - ox - d, oy); x.lineTo(W - ox - d - H, oy + H); x.stroke(); }
+      x.restore();
+      // ruler numbers along the top and left
+      x.fillStyle = "rgba(214,236,214,.42)"; x.font = `500 ${Math.round(cm * .36)}px "Chakra Petch", sans-serif`; x.textAlign = "center"; x.textBaseline = "middle";
+      for (let i = 0; ox + i * cm < W - ox + 1; i++) { if (i % 5) { x.fillRect(ox + i * cm - .4, oy - cm * .32, .8, cm * .22); continue; } x.fillText(String(i), ox + i * cm, oy - cm * .62); }
+      for (let j = 5; oy + j * cm < H - oy + 1; j += 5) x.fillText(String(j), ox - cm * .7, oy + j * cm);
+      // old knife cuts: a dark slit with a light lip
+      x.lineCap = "round";
+      for (let i = 0; i < 26; i++) { const px = r() * W, py = r() * H, straight = r() < .6, a = straight ? Math.round(r() * 4) * Math.PI / 4 : r() * 6.3, L = 30 + r() * 220;
+        const ex = px + Math.cos(a) * L, ey = py + Math.sin(a) * L;
+        x.strokeStyle = `rgba(8,18,12,${.25 + r() * .25})`; x.lineWidth = .8; x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke();
+        x.strokeStyle = `rgba(200,230,205,${.08 + r() * .08})`; x.lineWidth = .6; x.beginPath(); x.moveTo(px + .9, py + .9); x.lineTo(ex + .9, ey + .9); x.stroke(); }
+      return { lamp: [.26, .18, "rgba(255,226,180,.22)", 1.1], vig: "rgba(4,10,6,.55)" };
+    },
+    // 3. brushed steel, a bunker desk: warm-grey metal brushed left to right, a softer lamp, smudges of use
+    3: (x, W, H, k) => {
+      const r = rng(31);
+      x.drawImage(field(W, H, 1 / k, (px, py) => {
+        const brush = vn(px / 260, py * 1.3, 4) * .3 + vn(px / 900, py / 2.2, 6) * .3 + hash(px / 6 | 0, py * 2 | 0, 12) * .07;
+        const cloud = fbm(px / 380, py / 260, 17) * .5;
+        const t = .55 + brush * .16 + cloud * .18;
+        return [mix(92, 196, t), mix(88, 189, t), mix(82, 178, t)];
+      }), 0, 0, W, H);
+      // smudges: soft dull patches where hands rest
+      for (let i = 0; i < 9; i++) { const px = r() * W, py = r() * H, rr = 40 + r() * 90, g = x.createRadialGradient(px, py, 0, px, py, rr);
+        g.addColorStop(0, "rgba(60,52,44,.07)"); g.addColorStop(1, "rgba(60,52,44,0)"); x.fillStyle = g; x.fillRect(px - rr, py - rr, rr * 2, rr * 2); }
+      return { lamp: [.3, .16, "rgba(255,240,220,.28)", 1.2], vig: "rgba(30,22,14,.45)" };
+    },
+  };
+
+  let lastW = 0, url = null;
+  const build = () => {
+    const W = card.clientWidth, H = card.clientHeight; if (!W || !H) return;
+    if (Math.abs(W - lastW) < 2 && url) return; lastW = W;
+    const k = Math.min(2, devicePixelRatio || 1), c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k);
+    const x = c.getContext("2d"); x.scale(k, k);
+    const L = DESKS[DESK](x, W, H, k);
+    // the overhead lamp: a warm pool of light, and the desk falling away into the dark round it
+    const [lx, ly, lc, lr] = L.lamp, R = Math.hypot(W, H) * .62 * lr;
+    let g = x.createRadialGradient(W * lx, H * ly, 0, W * lx, H * ly, R); g.addColorStop(0, lc); g.addColorStop(1, "rgba(0,0,0,0)");
+    x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.globalCompositeOperation = "screen"; x.globalAlpha = .45; x.fillRect(0, 0, W, H);
+    x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+    g = x.createRadialGradient(W * lx, H * ly, R * .35, W * lx, H * ly, Math.hypot(W, H) * 1.05); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, L.vig);
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    url = c.toDataURL("image/jpeg", .88);
+    card.style.backgroundImage = `url("${url}")`; card.style.backgroundSize = `${W}px ${H}px`;
+  };
+  const go = () => requestAnimationFrame(build);
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(go);
+  let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(build, 200); });
+  new ResizeObserver(() => { clearTimeout(t); t = setTimeout(build, 200); }).observe(card);
 })();
 </script>
 <script type="module">
@@ -2255,6 +2371,28 @@ if (mark) {
   }
 
   // ---- the paper texture: grain, crease lines, the pecked PAC, a barely-ragged edge (alpha). 1024 × 794
+  // owner, Nov 26: "a little bit of texture" on the crumpled paper. its own random stream (rng 53), so the pecked mark,
+  // which draws from paperTexture's stream, stays exactly as it was. soft cloudy mottling + faint fibres, light and dark
+  function paperTooth(x, TW, TH) {
+    const r = rng(53), im = x.getImageData(0, 0, TW, TH), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const px = i / 4 % TW, py = i / 4 / TW | 0;
+      const m = vnoise(px / 150, py / 150, 3) * 7 + vnoise(px / 55, py / 55, 5) * 3; d[i] += m; d[i + 1] += m; d[i + 2] += m * .85; }
+    x.putImageData(im, 0, 0);
+    x.lineCap = "round";
+    for (let i = 0; i < 1400; i++) {
+      const px = r() * TW, py = r() * TH, a = r() * Math.PI, L = 4 + r() * 14, bend = (r() - .5) * 6, dark = r() < .55;
+      x.strokeStyle = dark ? `rgba(90,62,38,${.07 + r() * .08})` : `rgba(255,251,242,${.1 + r() * .12})`; x.lineWidth = .7 + r() * .8;
+      const ex = px + Math.cos(a) * L, ey = py + Math.sin(a) * L;
+      x.beginPath(); x.moveTo(px, py); x.quadraticCurveTo((px + ex) / 2 - Math.sin(a) * bend, (py + ey) / 2 + Math.cos(a) * bend, ex, ey); x.stroke();
+    }
+  }
+  // the same tooth as a height map, so it catches the light on the 3D sheet (bumpMap), not just in the colour
+  function paperBump(TW, TH) {
+    const c = document.createElement("canvas"); c.width = TW; c.height = TH; const x = c.getContext("2d"), r = rng(61), im = x.createImageData(TW, TH), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const px = i / 4 % TW, py = i / 4 / TW | 0;
+      const v = 128 + vnoise(px / 22, py / 22, 9) * 30 + vnoise(px / 7, py / 7, 11) * 24 + (r() - .5) * 10; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+    x.putImageData(im, 0, 0); return c;
+  }
   function paperTexture(lines, skip, bigP) {
     const TW = 1024, TH = Math.round(TW * SH / SW), c = document.createElement("canvas"); c.width = TW; c.height = TH;
     const x = c.getContext("2d"), r = rng(11);
@@ -2273,6 +2411,7 @@ if (mark) {
     const im = x.getImageData(0, 0, TW, TH), d = im.data;
     for (let i = 0; i < d.length; i += 4) { const g = (r() - .5) * 16 + vnoise((i / 4 % TW) / 40, (i / 4 / TW) / 40, 7) * 6; d[i] += g; d[i + 1] += g; d[i + 2] += g * .9; }
     x.putImageData(im, 0, 0);
+    paperTooth(x, TW, TH);
     // crease lines: the broken fibres show even where the sheet lies flat. a dark hairline and a light one beside it
     const tx = ([px, py]) => [(px / SW + .5) * TW, (.5 - py / SH) * TH];
     x.lineCap = "round";
@@ -2313,6 +2452,7 @@ if (mark) {
   // spacing of the mesh between creases, open = how much of its fold each crease keeps on the open sheet, soft = how far
   // a crease's shading rounds over (paper isn't razor sharp), and how smooth a facet's own slight bends shade
   const SEED = +new URLSearchParams(location.search).get("seed");
+  const BUMP = +(new URLSearchParams(location.search).get("bump") ?? 1.5);   // paper tooth strength (bumpMap), tuned by eye
   // the reworked ending for 6–9 (see foldSheet's finSheet): top band keeps the folds of stage 6 (the 4th step), the
   // letters are protected (P hardest: "you eat the P"), shading smooths out over the last steps
   const FIN = o => Object.assign({ keep: 6, full: 4.2, smooth: true, seed: .6, bands: [[.64, 2, 8, 0]],
@@ -2361,7 +2501,7 @@ if (mark) {
     sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; sun.shadow.bias = -.003; sun.shadow.normalBias = .05;
     Object.assign(sun.shadow.camera, { left: -3.5, right: 3.5, top: 3, bottom: -3, near: 1, far: 14 }); scene.add(sun);
     // the letter's surface behind the sheet: invisible except for the shadow falling on it
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial({ opacity: .26, color: 0x3c1405 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial(document.querySelector(".paper.desk") ? { opacity: .5, color: 0x0a0402 } : { opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
     const { flat, tris, snaps, creases, spreadRef, vw } = await folded, N = flat.length / 2, T = tris.length / 3;
@@ -2396,7 +2536,8 @@ if (mark) {
     geo.setAttribute("position", pos); geo.setAttribute("normal", nor); geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     const V = new Float32Array(N * 3), TN = new Float32Array(T * 3), TU = new Float32Array(T * 3);
     const map = new THREE.CanvasTexture(tex2d); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
-    const mat = new THREE.MeshStandardMaterial({ map, roughness: .93, metalness: 0, side: THREE.DoubleSide, alphaTest: .5 });
+    const bump = new THREE.CanvasTexture(paperBump(tex2d.width, tex2d.height)); bump.anisotropy = 4;
+    const mat = new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: BUMP, roughness: .93, metalness: 0, side: THREE.DoubleSide, alphaTest: .5 });
     // the back of the sheet is plain paper, no ink showing through
     mat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(.80, .72, .60);"); };
     const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; scene.add(mesh);
