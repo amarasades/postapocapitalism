@@ -253,6 +253,21 @@
   .paper.desk p { color: rgba(244,233,218,.84); }
   .paper.desk .lbl { color: rgba(244,233,218,.6); }
 
+  /* ?desk=4/5/6: the card is a desk top (SLAB script, texture set inline at the card's size) */
+  .paper.slab { position: relative; border-color: transparent; background-repeat: no-repeat; }
+  /* the top's front edge, seen a little from above: it makes the card a slab, not a sticker */
+  .paper.slab::after { content: ""; position: absolute; left: -1px; right: -1px; top: 100%; height: 11px; pointer-events: none; background: var(--edge-g); }
+  .paper.slab-1, .paper.slab-2 { --edge-g: linear-gradient(#b0814f, #8f6337 30%, #7a522c 75%, #5e3d1f); }
+  .paper.slab-3 { --edge-g: linear-gradient(#dfe2e3, #9a9fa2 22%, #7d8285 70%, #5b6063); }
+  .paper.slab-1 { background-color: #c49a68; box-shadow: 0 44px 60px -26px rgba(40,15,5,.75); }
+  .paper.slab-2 { background-color: #b0ada2; box-shadow: 0 44px 60px -26px rgba(40,15,5,.75); }
+  .paper.slab-3 { background-color: #a9acae; box-shadow: 0 44px 60px -26px rgba(30,15,10,.75); }
+
+  .paper.desk, .paper.slab { position: relative; }
+  .paper canvas.pencil { position: absolute; pointer-events: none; }
+  /* phones: room under the text for the pencil, reserved up front so the desk texture is drawn at the final height */
+  @media (max-width: 900px) { .paper.desk, .paper.slab { padding-bottom: 104px; } }
+
   /* ---------- log ---------- */
   .log { --r: 18px; }
   .log .row { display: grid; grid-template-columns: 60px 140px 1fr auto; gap: 16px; align-items: baseline; padding: 15px 18px; border-bottom: 1px dotted var(--ink-line); }
@@ -2028,11 +2043,9 @@
       knife(x, W * .78, M.b + 8, -.35, 110);
       paperclip(x, W - 30, T.b + 18, .4); paperclip(x, W - 52, T.b + 22, -.2);
       ruler(x, W * .5, Math.min(H - 8, T.b + 20), .02, W * .7);
-      pencil(x, W * .2, M.b - 30, -.45, 120);   // on the mat: below the text there's only room for the ruler
     } else {
       const free = H - T.b, rx = T.x + Math.min(T.w, 380) / 2;
       if (free > 46) ruler(x, rx, T.b + free * .52, .015, Math.min(T.w, 380));
-      pencil(x, T.r + (W - T.r) * .55, H * .58, 1.38, Math.min(190, H * .42));
       knife(x, M.x + M.w * .2, M.b - 6, .6, 118);
       paperclip(x, T.x + 30, T.y - 42, .3); paperclip(x, T.x + 58, T.y - 30, -.5); paperclip(x, W - 60, H - 34, 1.1);
       binder(x, W - 54, 54, .35);
@@ -2048,6 +2061,209 @@
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(go);
   let t; const later = () => { clearTimeout(t); t = setTimeout(build, 200); };
   addEventListener("resize", later); new ResizeObserver(later).observe(card);
+})();
+</script>
+<script>
+/* ---------- SLAB: three more desks (owner, Nov 26, second ask: "paper on fake paper", make it a skeuomorphic desk) ----------
+   ?desk=4 solid oak (glued-up staves, some flat-sawn with cathedrals, some rift), ?desk=5 linoleum with an oak edge,
+   ?desk=6 brushed steel workbench. (?desk=1-3 are the darker desks above.) no parameter = the old paper card. every surface is generated per pixel in a 2D
+   canvas (no svg, no photos: CLAUDE.md §2b), at the card's own size, grain along its long side (so it turns on phones),
+   lit from the upper left like the 3D sheet. regenerated when the card's width changes */
+(() => {
+  const k = +new URLSearchParams(location.search).get("desk") - 3, card = document.querySelector(".paper");
+  if (!(k >= 1 && k <= 3) || !card) return;
+  card.classList.add("slab", "slab-" + k);
+  const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
+  const mkNoise = seed => {
+    const r = rng(seed), P = new Uint8Array(512), G = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { P[i] = i; G[i] = r() * 2 - 1; }
+    for (let i = 255; i > 0; i--) { const j = (r() * (i + 1)) | 0, t = P[i]; P[i] = P[j]; P[j] = t; }
+    for (let i = 0; i < 256; i++) P[i + 256] = P[i];
+    return (x, y) => {
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, X = xi & 255, Y = yi & 255;
+      const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const a = G[P[P[X] + Y]], b = G[P[P[X + 1] + Y]], c = G[P[P[X] + Y + 1]], d = G[P[P[X + 1] + Y + 1]];
+      return a + (b - a) * u + (c - a + (a - b + d - c) * u) * v;
+    };
+  };
+  const fbm = (n, x, y, o) => { let s = 0, a = .5, f = 1; for (let i = 0; i < o; i++) { s += a * n(x * f, y * f); a *= .5; f *= 2.03; } return s; };
+  const rr = (x, X, Y, W, H, R) => { x.beginPath(); x.roundRect ? x.roundRect(X, Y, W, H, R) : x.rect(X, Y, W, H); };
+
+  // solid oak, in grain coordinates: u along the long side, v across. returns rgb in out[]
+  const oakField = (Lu, Lv, seed, forceRift) => {
+    const r = rng(seed), n1 = mkNoise(seed + 1), n2 = mkNoise(seed + 2), n3 = mkNoise(seed + 3), staves = [];
+    for (let v = 0; v < Lv - 40;) { const w = Math.min(Lv - v, 78 + r() * 64); staves.push({ v0: v, v1: v + w, flat: !forceRift && r() < .45,
+      d0: 50 + r() * 50, A: 20 + r() * 20, per: 220 + r() * 300, ph: r() * 6.3, vc: v + w * (.25 + .5 * r()), sp: 5.2 + r() * 2.6,
+      tone: (r() - .5) * .2, hue: (r() - .5) * .05, off: r() * 900, sl: (r() - .5) * .012 }); v += w; }
+    staves[staves.length - 1].v1 = Lv + 1;
+    return (u, v, out) => {
+      let s = staves[0]; for (const t of staves) if (v >= t.v0) s = t;
+      let R;
+      if (s.flat) { const d = s.d0 + s.A * Math.sin((u + s.off) / s.per + s.ph), dv = v - s.vc; R = Math.sqrt(d * d + dv * dv); }
+      else R = v + u * s.sl;
+      R += fbm(n1, (u + s.off) / 430, v / 70, 3) * 10 + n2((u + s.off) / 90, v / 9) * 1.4;
+      // rings of uneven width: the growth varied year to year
+      const q = R / s.sp + fbm(n2, R / 24 + s.off, 3.7, 2) * 1.1, p = q - Math.floor(q);
+      // earlywood: a band of big pores right after the ring line, fading into the denser latewood
+      const ew = p < .05 ? p / .05 : Math.max(0, 1 - (p - .05) / .32), lw = .25 * Math.max(0, (p - .55) / .45);
+      const fine = n3((u + s.off) / 3.2, R * 2.4), coarse = n3((u + s.off) / 11 + 50, R * .9);
+      const pore = Math.max(0, fine - .1) * (.15 + 1.1 * ew) + Math.max(0, coarse - .35) * .5 * ew;
+      const fleck = s.flat ? 0 : Math.max(0, n2((u + s.off) / 26, v / 2.4) - .6) * 1.4;   // medullary rays on the rift staves
+      const t = fbm(n1, u / 520 + 9, v / 140, 2) * .08 + s.tone;
+      const dk = Math.min(1, .3 * ew + .8 * lw + .45 * pore);
+      // oiled white oak: warm straw, the pores and ring lines a darker honey brown
+      out[0] = (203 + 40 * t) * (1 - .22 * dk) + 9 * fleck; out[1] = (166 + 36 * t - s.hue * 160) * (1 - .27 * dk) + 7 * fleck; out[2] = (124 + 26 * t) * (1 - .34 * dk) + 4 * fleck;
+      if (Math.abs(v - s.v0) < .7 && s.v0 > 0) { out[0] *= .9; out[1] *= .9; out[2] *= .9; }  // glue line
+    };
+  };
+  const linoField = (Lu, Lv, seed) => {
+    const n1 = mkNoise(seed), n2 = mkNoise(seed + 5), r = rng(seed + 9);
+    return (u, v, out) => {
+      const m = fbm(n1, u / 40, v / 11, 4) * .028 + fbm(n2, u / 6, v / 2.2, 2) * .022 + (r() - .5) * .026;
+      // forbo desktop, a warm pebble grey
+      out[0] = 176 * (1 + m); out[1] = 173 * (1 + m); out[2] = 162 * (1 + m * 1.1);
+    };
+  };
+  const steelField = (Lu, Lv, seed) => {
+    const n1 = mkNoise(seed), n2 = mkNoise(seed + 3), n3 = mkNoise(seed + 7);
+    return (u, v, out) => {
+      const b = .55 * n1(u / 230, v / 1.05) + .3 * n2(u / 55, v / .55) + .15 * n3(u / 900, v / 7);
+      const m = fbm(n3, u / 420 + 4, v / 260, 3);
+      const c = 170 + b * 9 + m * 10;
+      out[0] = c - 2; out[1] = c + 1; out[2] = c + 3;
+    };
+  };
+
+  const draw = () => {
+    const W = card.clientWidth, H = card.clientHeight; if (W < 50 || H < 50) return;
+    const s = Math.min(devicePixelRatio || 1, 1.5), cw = Math.round(W * s), ch = Math.round(H * s), long = W >= H;
+    const Lu = long ? W : H, Lv = long ? H : W, out = [0, 0, 0];
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch; const x = c.getContext("2d");
+    const R = parseFloat(getComputedStyle(card).borderTopLeftRadius) || 0;
+    const fill = (field, rot) => {
+      const img = x.createImageData(cw, ch), d = img.data;
+      for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+        const X = i / s, Y = j / s, along = rot === undefined ? long : rot;
+        along ? field(X, Y, out) : field(Y, W - X, out);
+        // light from the upper left (the 3D sheet's sun), a soft falloff to the far corner
+        const lx = X / W, ly = Y / H, L = 1.07 - .1 * Math.hypot(lx * .8, ly * 1.1) - .05 * Math.pow(Math.max(Math.abs(lx - .5) * 2, Math.abs(ly - .5) * 2), 6);
+        const o = 4 * (j * cw + i); d[o] = out[0] * L; d[o + 1] = out[1] * L; d[o + 2] = out[2] * L; d[o + 3] = 255;
+      }
+      return img;
+    };
+    if (k === 1) x.putImageData(fill(oakField(Lu, Lv, 11)), 0, 0);
+    if (k === 3) {
+      x.putImageData(fill(steelField(Lu, Lv, 5)), 0, 0);
+      // brushed metal: the sheen is a broad soft band across the brushing, nearest the light
+      const g = x.createLinearGradient(0, 0, cw, ch * .4);
+      g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(.28, "rgba(255,255,255,.16)"); g.addColorStop(.5, "rgba(255,255,255,0)"); g.addColorStop(.8, "rgba(20,24,28,.08)");
+      x.fillStyle = g; x.fillRect(0, 0, cw, ch);
+      // workshop wear: short scuffs, mostly with the brushing
+      const r = rng(77); x.lineCap = "round";
+      for (let i = 0; i < 340; i++) {
+        const px = r() * cw, py = r() * ch, a = (long ? 0 : Math.PI / 2) + (r() < .7 ? (r() - .5) * .25 : r() * Math.PI), l = (4 + Math.pow(r(), 3) * 70) * s;
+        const lt = r() < .6; x.strokeStyle = lt ? `rgba(255,255,255,${.05 + r() * .12})` : `rgba(30,32,34,${.04 + r() * .09})`; x.lineWidth = (.4 + r() * .6) * s;
+        x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke();
+      }
+    }
+    if (k === 2) {
+      const e = 4 * s, ri = Math.max(0, R * s - e);
+      x.putImageData(fill(oakField(W, H, 23, true), true), 0, 0);
+      const oakH = c, tmp = document.createElement("canvas"); tmp.width = cw; tmp.height = ch;
+      const t = tmp.getContext("2d"); t.putImageData(fill(oakField(H, W, 29, true), false), 0, 0);
+      // sides: grain runs along each side, mitred at the corners
+      x.save(); x.beginPath(); x.moveTo(0, 0); x.lineTo(e, e); x.lineTo(e, ch - e); x.lineTo(0, ch); x.closePath();
+      x.moveTo(cw, 0); x.lineTo(cw - e, e); x.lineTo(cw - e, ch - e); x.lineTo(cw, ch); x.closePath(); x.clip(); x.drawImage(tmp, 0, 0); x.restore();
+      x.save(); x.strokeStyle = "rgba(60,35,15,.35)"; x.lineWidth = .8;
+      for (const [a, b, c2, d2] of [[0, 0, e, e], [cw, 0, cw - e, e], [0, ch, e, ch - e], [cw, ch, cw - e, ch - e]]) { x.beginPath(); x.moveTo(a, b); x.lineTo(c2, d2); x.stroke(); }
+      x.restore();
+      const li = document.createElement("canvas"); li.width = cw; li.height = ch; const lx = li.getContext("2d");
+      lx.putImageData(fill(linoField(Lu, Lv, 31)), 0, 0);
+      x.save(); rr(x, e, e, cw - 2 * e, ch - 2 * e, ri); x.clip(); x.drawImage(li, 0, 0);
+      // the linoleum sits a hair below the oak lip: a soft shadow from the upper-left edge
+      x.shadowColor = "rgba(40,25,10,.45)"; x.shadowBlur = 3 * s; x.shadowOffsetX = 1 * s; x.shadowOffsetY = 1.2 * s;
+      x.lineWidth = 6 * s; x.strokeStyle = "rgba(0,0,0,1)"; x.globalCompositeOperation = "source-atop";
+      rr(x, e - 3 * s, e - 3 * s, cw - 2 * e + 6 * s, ch - 2 * e + 6 * s, ri + 3 * s); x.stroke(); x.restore();
+    }
+    // the top's own edge: catches the light on the upper left, falls away on the lower right
+    const g = x.createLinearGradient(0, 0, cw, ch);
+    g.addColorStop(0, "rgba(255,248,236,.55)"); g.addColorStop(.5, "rgba(255,248,236,.08)"); g.addColorStop(1, "rgba(20,10,5,.35)");
+    x.lineWidth = 2 * s; x.strokeStyle = g; rr(x, s, s, cw - 2 * s, ch - 2 * s, Math.max(0, R * s - s)); x.stroke();
+    card.style.backgroundImage = `url(${c.toDataURL("image/jpeg", .9)})`; card.style.backgroundSize = `${W}px ${H}px`;   // explicit px: the Safari nav redraw scales it
+  };
+  let lastW = 0, T = 0;
+  const go = () => { const w = card.clientWidth; if (Math.abs(w - lastW) < 8) return; lastW = w; draw(); };
+  go();
+  if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 200); }).observe(card);
+})();
+</script>
+<script type="module">
+/* ---------- PENCIL: something that screams desk (owner, Nov 26) ----------
+   on every ?desk= variant: a real 3D pencil (three.js) lying on the desk under the text, lit like the 3D sheet (same
+   lights, same direction), casting its shadow on the desk. its own small canvas, so the paper's scene is untouched.
+   scale: the sheet is taken as 175 mm wide (a small letter; at A4 scale the pencil read as a toothpick), so the pencil (175 mm, 7 mm across the flats) is the size it would be next
+   to it. renders once (and on resize); preserveDrawingBuffer so the iPhone nav glass can copy it */
+const card = document.querySelector(".paper.desk, .paper.slab"), mark = card && card.querySelector(".mark");
+if (card && mark) (async () => {
+  let THREE; try { THREE = await import("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js"); } catch (e) { return; }
+  const cv = document.createElement("canvas"); cv.className = "pencil"; cv.setAttribute("aria-hidden", "true"); card.append(cv);
+  let R; try { R = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, preserveDrawingBuffer: true }); } catch (e) { cv.remove(); return; }
+  R.setClearColor(0, 0); R.outputColorSpace = THREE.SRGBColorSpace; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xfff6ec, 0xa07a5a, 1.25));   // a little more bounce than the paper's: the pencil's lower flats went near black
+  const sun = new THREE.DirectionalLight(0xfff2e2, 2.3); sun.position.set(-32, 40, 60); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.bias = -.0005; sun.shadow.normalBias = .02;
+  Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 200 }); scene.add(sun, sun.target);
+  const k = +new URLSearchParams(location.search).get("desk");
+  const sh = ({ 1: [.5, 0x0a0402], 2: [.5, 0x0a0402], 3: [.45, 0x0a0402], 4: [.36, 0x2a1406], 5: [.34, 0x1e1a14], 6: [.38, 0x14181b] })[k] || [.36, 0x1e1a14];
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: sh[0], color: sh[1] }));
+  floor.receiveShadow = true; scene.add(floor);
+
+  // the pencil, in mm, along +x (point at +x), lying on a flat of its hexagon. Rf = radius to the corners
+  const Rf = 4.04, Ri = Rf * Math.cos(Math.PI / 6), P = new THREE.Group();
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xf0b31a, roughness: .38, clearcoat: .7, clearcoatRoughness: .25, flatShading: true });
+  const wood = new THREE.MeshStandardMaterial({ color: 0xd9a46a, roughness: .85 });
+  const lead = new THREE.MeshStandardMaterial({ color: 0x2c2c2e, roughness: .35, metalness: .45 });
+  const brass = new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: .3, metalness: .55 });
+  const rub = new THREE.MeshStandardMaterial({ color: 0xe58a8a, roughness: .9 });
+  const along = (geo, x0, x1) => { geo.rotateZ(-Math.PI / 2); geo.translate((x0 + x1) / 2, 0, 0); return geo; };   // cylinder axis y → x
+  const L = 175, body = [-L / 2 + 19, L / 2 - 21];                                                     // ferrule + eraser at -x, cone at +x
+  const hex = along(new THREE.CylinderGeometry(Rf, Rf, body[1] - body[0], 6, 1), body[0], body[1]);
+  hex.rotateX(Math.PI / 6);
+  P.add(new THREE.Mesh(hex, paint));
+  // the sharpened end: the knife cut leaves the paint in scallops; a 6-sided cone keeps those arcs readable
+  const cone = along(new THREE.CylinderGeometry(1.05, Rf * .98, 17, 48, 1, true), body[1], body[1] + 17); P.add(new THREE.Mesh(cone, wood));
+  const tip = along(new THREE.CylinderGeometry(0.02, 1.05, 4, 32), body[1] + 17, body[1] + 21); P.add(new THREE.Mesh(tip, lead));
+  const fer = along(new THREE.CylinderGeometry(Rf * .93, Rf * .93, 11, 40), body[0] - 11, body[0]); P.add(new THREE.Mesh(fer, brass));
+  for (const x of [body[0] - 2.5, body[0] - 8.5]) { const t = new THREE.TorusGeometry(Rf * .93, .35, 8, 40); t.rotateY(Math.PI / 2); t.translate(x, 0, 0); P.add(new THREE.Mesh(t, brass)); }
+  const er = along(new THREE.CylinderGeometry(Rf * .86, Rf * .86, 7, 40), body[0] - 18, body[0] - 11); P.add(new THREE.Mesh(er, rub));
+  const cap = new THREE.SphereGeometry(Rf * .86, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, .35, 1); cap.rotateZ(Math.PI / 2); cap.translate(body[0] - 18, 0, 0); P.add(new THREE.Mesh(cap, rub));
+  P.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  P.position.z = Ri; scene.add(P);
+
+  const cam = new THREE.PerspectiveCamera(12, 1, 10, 3000);
+  const place = () => {
+    const c = card.getBoundingClientRect(), col = card.children[1], last = col && col.lastElementChild;
+    if (!last) return;
+    const pxmm = mark.clientWidth * (4 / 5.2) / 175, phone = c.width < 700;
+    const cs = getComputedStyle(card), pad = parseFloat(cs.paddingLeft);
+    const left = phone ? pad : col.getBoundingClientRect().left - c.left, right = c.width - pad * (phone ? 1 : .6);
+    const W = right - left, H = Math.round(Math.max(64, 40 * pxmm));
+    let top = last.getBoundingClientRect().bottom - c.top + (phone ? 16 : 22);
+    // room under the text: add padding if the card hasn't got enough
+    const need = top + H - (c.height - (phone ? 10 : 18));
+    if (need > 0) card.style.paddingBottom = (parseFloat(cs.paddingBottom) + need) + "px";
+    Object.assign(cv.style, { left: left + "px", top: top + "px", width: W + "px", height: H + "px" });
+    R.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); R.setSize(W, H, false);
+    // camera straight above, frustum = the canvas in mm
+    const hmm = H / pxmm, wmm = W / pxmm; cam.aspect = W / H; cam.position.set(0, 0, hmm / 2 / Math.tan(6 * Math.PI / 180)); cam.updateProjectionMatrix();
+    // the pencil lies across the space, a little turned, towards the right
+    P.rotation.z = phone ? .12 : .1; P.position.x = wmm / 2 - L / 2 - 8; P.position.y = -1;
+    R.render(scene, cam);
+  };
+  let lw = 0, T = 0; const go = () => { if (Math.abs(card.clientWidth - lw) < 4) return; lw = card.clientWidth; card.style.paddingBottom = ""; place(); };
+  document.fonts?.ready.then(() => { lw = 0; go(); }); go();
+  if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 150); }).observe(card);
 })();
 </script>
 <script type="module">
@@ -2585,7 +2801,7 @@ if (mark) {
     sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; sun.shadow.bias = -.003; sun.shadow.normalBias = .05;
     Object.assign(sun.shadow.camera, { left: -3.5, right: 3.5, top: 3, bottom: -3, near: 1, far: 14 }); scene.add(sun);
     // the letter's surface behind the sheet: invisible except for the shadow falling on it
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial(document.querySelector(".paper.desk") ? { opacity: .5, color: 0x0a0402 } : { opacity: .26, color: 0x3c1405 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial(document.querySelector(".paper.slab") ? ({ 1: { opacity: .36, color: 0x2a1406 }, 2: { opacity: .34, color: 0x1e1a14 }, 3: { opacity: .38, color: 0x14181b } })[+new URLSearchParams(location.search).get("desk") - 3] : document.querySelector(".paper.desk") ? { opacity: .5, color: 0x0a0402 } : { opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
     const { flat, tris, snaps, creases, spreadRef, vw } = await folded, N = flat.length / 2, T = tris.length / 3;
