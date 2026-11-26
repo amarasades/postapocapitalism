@@ -249,13 +249,9 @@
   .paper h2 { font-size: clamp(38px, 5.2vw, 72px); }
   .paper p { margin-top: 20px; font-size: 18px; max-width: 44ch; color: rgba(42,29,20,.8); }
   /* ?desk=1/2/3: the card is a desk seen from above (image set by the desk script); light ink on the dark desks */
-  .paper.desk { background-color: #2a1a10; border-color: rgba(0,0,0,.35); box-shadow: 0 30px 60px -26px rgba(40,12,2,.75); background-repeat: no-repeat; }
-  .paper.desk-2 { background-color: #22332a; }
-  .paper.desk-3 { background-color: #9a958e; border-color: rgba(255,250,240,.35); }
-  .paper.desk-1, .paper.desk-2 { color: #f4e9da; }
-  .paper.desk-1 p, .paper.desk-2 p { color: rgba(244,233,218,.82); }
-  .paper.desk-1 .lbl, .paper.desk-2 .lbl { color: rgba(244,233,218,.58); }
-  .paper.desk-3 p { color: rgba(30,24,18,.84); }
+  .paper.desk { background-color: #2a1a10; border-color: rgba(0,0,0,.35); box-shadow: 0 30px 60px -26px rgba(40,12,2,.75); background-repeat: no-repeat; color: #f4e9da; }
+  .paper.desk p { color: rgba(244,233,218,.84); }
+  .paper.desk .lbl { color: rgba(244,233,218,.6); }
 
   /* ---------- log ---------- */
   .log { --r: 18px; }
@@ -476,7 +472,7 @@
           </div>
           <div class="mod-body">
             <span class="kind hud">CAD</span><h3>Cad3t<span class="beta hud">Beta</span></h3>
-            <p>Full CAD, from the cabinet to the circuit board inside it, ready for the CNC. Draw the spare part instead of buying the whole machine again.</p>
+            <p>Full CAD, from the cabinet to the circuit board inside it, straight to the CNC.</p>
           </div>
         </article>
 
@@ -497,7 +493,7 @@
           </div>
           <div class="mod-body">
             <span class="kind hud">Touchscreen DJ</span><h3>Touch D3ck</h3>
-            <p>DJ software built for the touchscreen, not squeezed onto it. Nothing eats half the screen. The space goes to the music.</p>
+            <p>DJ software built for the touchscreen, not squeezed onto it. Decks where your hands want them, the rest of the screen for the music.</p>
           </div>
         </article>
 
@@ -535,7 +531,7 @@
           <span class="hud lbl">Transmission 02 // partial</span>
           <h2>We've seen how this ends.</h2>
           <p>So we're building the tools that change it. Waste less, last longer, and keep culture alive.</p>
-          <p>Not because we're nice. Because we have to live here later.</p>
+          <p>We have to live here later.</p>
         </div>
       </div>
     </div>
@@ -1861,109 +1857,197 @@
 })();
 </script>
 <script>
-// ?desk=1/2/3 (owner, Nov 26): the transmission seen from above, lying on a desk, like an overhead shot in a film.
-// the paper card's background becomes the desk; the crumpled sheet is the only paper. comparison only: no parameter = the
-// paper card as approved. each desk is one image baked in a 2D canvas at the card's size (lamp pool and vignette baked in),
-// set as the card's ONLY background layer with an explicit background-size, so the Safari nav redraw copies it as is.
+// ?desk=1/2/3 (owner, Nov 26): the transmission seen from above on a desk, like an overhead shot in a film. walnut, an
+// anglepoise lamp in the top-left corner (where the 3D ball's own light comes from, so every shadow agrees), a cutting
+// mat under the paper, and stationery round the edges. 1 green mat, 2 blue, 3 graphite. comparison only: no parameter =
+// the approved paper card. the whole scene is ONE image baked in a 2D canvas at the card's size × dpr, set as the card's
+// only background with an explicit background-size (the Safari nav redraw copies exactly that), and laid out from the
+// measured positions of the paper and the text, so nothing sits under the words on any screen size.
 (() => {
   const DESK = +new URLSearchParams(location.search).get("desk");
   if (!(DESK >= 1 && DESK <= 3)) return;
   const card = document.querySelector(".paper"); if (!card) return;
   card.classList.add("desk", "desk-" + DESK);
+  const MAT = { 1: [[34, 74, 56], "214,236,214"], 2: [[26, 62, 112], "214,228,246"], 3: [[42, 43, 46], "226,226,222"] }[DESK];
   const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
   const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
   const vn = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
     const a = hash(i, j, c), b = hash(i + 1, j, c), d = hash(i, j + 1, c), e = hash(i + 1, j + 1, c); return a + (b - a) * sx + (d - a) * sy + (a - b - d + e) * sx * sy; };
   const fbm = (x, y, c, o = 4) => { let v = 0, a = .5, f = 1; for (let k = 0; k < o; k++) { v += vn(x * f, y * f, c + k) * a; a *= .5; f *= 2.03; } return v; };
   const mix = (a, b, t) => a + (b - a) * t;
-
-  // per-pixel base, at reduced resolution for speed (s = css px per sample), drawn up smoothly
   const field = (W, H, s, fn) => { const w = Math.ceil(W / s), h = Math.ceil(H / s), c = document.createElement("canvas"); c.width = w; c.height = h;
     const g = c.getContext("2d"), im = g.createImageData(w, h), d = im.data;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = (y * w + x) * 4, p = fn(x * s, y * s); d[o] = p[0]; d[o + 1] = p[1]; d[o + 2] = p[2]; d[o + 3] = 255; }
     g.putImageData(im, 0, 0); return c; };
 
-  const DESKS = {
-    // 1. walnut, lamp-lit. planks run across the card, the grain flows round slow knots
-    1: (x, W, H, k) => {
-      const plank = H / 2.3, r = rng(7);
-      x.drawImage(field(W, H, 1 / k, (px, py) => {   // sampled at device pixels: the grain is fine, upscaling smeared it
-        const pi = Math.floor((py + plank * .35) / plank), yy = py + pi * 913.7;
-        const warp = fbm(px / 520 + pi * 3, yy / 110, 3) * 60 + fbm(px / 90, yy / 30, 23, 2) * 4;
-        const ring = (yy + warp) / (9 + (pi % 2) * 3), f = ring - Math.floor(ring);
-        const late = Math.pow(1 - Math.abs(f - .82) / .82, 9) * .7 + Math.pow(f, 3) * .25;   // a dark latewood line, ramping in
-        const pore = vn(px / 3.2, yy * .9, 13) * .5 + vn(px / 11, yy * .6, 14) * .5;          // open pores: short streaks along the grain
-        const t = Math.min(1, Math.max(0, .62 - late * .55 + pore * .14 + fbm(px / 800, yy / 200, 21) * .3));
-        return [mix(30, 118, t), mix(16, 70, t), mix(9, 40, t)];
-      }), 0, 0, W, H);
-      // plank seams: a dark gap with a lit lip below it
-      for (let yy = plank * .65; yy < H; yy += plank) { x.fillStyle = "rgba(10,4,1,.55)"; x.fillRect(0, yy - 1, W, 1.6); x.fillStyle = "rgba(255,210,160,.08)"; x.fillRect(0, yy + .8, W, 1); }
-      // a few fine scratches in the finish
-      x.lineCap = "round";
-      for (let i = 0; i < 70; i++) { const px = r() * W, py = r() * H, a = (r() - .5) * .5, L = 20 + r() * 90; x.strokeStyle = `rgba(255,220,180,${.03 + r() * .05})`; x.lineWidth = .6;
-        x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L); x.stroke(); }
-      return { lamp: [.24, .2, "rgba(255,196,128,.34)", 1.05], vig: "rgba(8,3,1,.62)" };
-    },
-    // 2. self-healing cutting mat (dark green), the maker's desk: 1 cm grid, bolder every 5, 45° guides, rulers, knife cuts
-    2: (x, W, H, k) => {
-      const r = rng(19);
-      x.drawImage(field(W, H, 2, (px, py) => { const m = fbm(px / 300, py / 300, 5) * .5 + fbm(px / 18, py / 18, 8, 2) * .18; return [33 + m * 18, 52 + m * 22, 44 + m * 18]; }), 0, 0, W, H);
-      const cm = Math.max(20, Math.min(30, W / 48)), ox = cm * 1.6, oy = cm * 1.6;
-      x.save(); x.beginPath(); x.rect(ox, oy, W - ox * 2, H - oy * 2); x.clip();
-      for (let i = 0; ox + i * cm < W; i++) { const b = i % 5 === 0; x.fillStyle = `rgba(214,236,214,${b ? .3 : .13})`; x.fillRect(ox + i * cm - (b ? .6 : .4), 0, b ? 1.2 : .8, H); }
-      for (let j = 0; oy + j * cm < H; j++) { const b = j % 5 === 0; x.fillStyle = `rgba(214,236,214,${b ? .3 : .13})`; x.fillRect(0, oy + j * cm - (b ? .6 : .4), W, b ? 1.2 : .8); }
-      x.strokeStyle = "rgba(214,236,214,.11)"; x.lineWidth = .8;
-      for (let d = -H; d < W; d += cm * 10) { x.beginPath(); x.moveTo(ox + d, oy); x.lineTo(ox + d + H, oy + H); x.stroke(); x.beginPath(); x.moveTo(W - ox - d, oy); x.lineTo(W - ox - d - H, oy + H); x.stroke(); }
-      x.restore();
-      // ruler numbers along the top and left
-      x.fillStyle = "rgba(214,236,214,.42)"; x.font = `500 ${Math.round(cm * .36)}px "Chakra Petch", sans-serif`; x.textAlign = "center"; x.textBaseline = "middle";
-      for (let i = 0; ox + i * cm < W - ox + 1; i++) { if (i % 5) { x.fillRect(ox + i * cm - .4, oy - cm * .32, .8, cm * .22); continue; } x.fillText(String(i), ox + i * cm, oy - cm * .62); }
-      for (let j = 5; oy + j * cm < H - oy + 1; j += 5) x.fillText(String(j), ox - cm * .7, oy + j * cm);
-      // old knife cuts: a dark slit with a light lip
-      x.lineCap = "round";
-      for (let i = 0; i < 26; i++) { const px = r() * W, py = r() * H, straight = r() < .6, a = straight ? Math.round(r() * 4) * Math.PI / 4 : r() * 6.3, L = 30 + r() * 220;
-        const ex = px + Math.cos(a) * L, ey = py + Math.sin(a) * L;
-        x.strokeStyle = `rgba(8,18,12,${.25 + r() * .25})`; x.lineWidth = .8; x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke();
-        x.strokeStyle = `rgba(200,230,205,${.08 + r() * .08})`; x.lineWidth = .6; x.beginPath(); x.moveTo(px + .9, py + .9); x.lineTo(ex + .9, ey + .9); x.stroke(); }
-      return { lamp: [.26, .18, "rgba(255,226,180,.22)", 1.1], vig: "rgba(4,10,6,.55)" };
-    },
-    // 3. brushed steel, a bunker desk: warm-grey metal brushed left to right, a softer lamp, smudges of use
-    3: (x, W, H, k) => {
-      const r = rng(31);
-      x.drawImage(field(W, H, 1 / k, (px, py) => {
-        const brush = vn(px / 260, py * 1.3, 4) * .3 + vn(px / 900, py / 2.2, 6) * .3 + hash(px / 6 | 0, py * 2 | 0, 12) * .07;
-        const cloud = fbm(px / 380, py / 260, 17) * .5;
-        const t = .55 + brush * .16 + cloud * .18;
-        return [mix(92, 196, t), mix(88, 189, t), mix(82, 178, t)];
-      }), 0, 0, W, H);
-      // smudges: soft dull patches where hands rest
-      for (let i = 0; i < 9; i++) { const px = r() * W, py = r() * H, rr = 40 + r() * 90, g = x.createRadialGradient(px, py, 0, px, py, rr);
-        g.addColorStop(0, "rgba(60,52,44,.07)"); g.addColorStop(1, "rgba(60,52,44,0)"); x.fillStyle = g; x.fillRect(px - rr, py - rr, rr * 2, rr * 2); }
-      return { lamp: [.3, .16, "rgba(255,240,220,.28)", 1.2], vig: "rgba(30,22,14,.45)" };
-    },
+  const walnut = (x, W, H, k) => {
+    const plank = Math.max(180, H / 2.3);
+    x.drawImage(field(W, H, 1 / k, (px, py) => {
+      const pi = Math.floor((py + plank * .35) / plank), yy = py + pi * 913.7;
+      const warp = fbm(px / 520 + pi * 3, yy / 110, 3) * 60 + fbm(px / 90, yy / 30, 23, 2) * 4;
+      const ring = (yy + warp) / (9 + (pi % 2) * 3), f = ring - Math.floor(ring);
+      const late = Math.pow(1 - Math.abs(f - .82) / .82, 9) * .7 + Math.pow(f, 3) * .25;
+      const pore = vn(px / 3.2, yy * .9, 13) * .5 + vn(px / 11, yy * .6, 14) * .5;
+      const t = Math.min(1, Math.max(0, .62 - late * .55 + pore * .14 + fbm(px / 800, yy / 200, 21) * .3));
+      return [mix(30, 118, t), mix(16, 70, t), mix(9, 40, t)];
+    }), 0, 0, W, H);
+    for (let yy = plank * .65; yy < H; yy += plank) { x.fillStyle = "rgba(10,4,1,.55)"; x.fillRect(0, yy - 1, W, 1.6); x.fillStyle = "rgba(255,210,160,.08)"; x.fillRect(0, yy + .8, W, 1); }
   };
 
-  let lastW = 0, url = null;
+  // every object casts a soft shadow away from the lamp
+  let LX = 0, LY = 0;
+  const shadowed = (x, px, py, h, draw) => { const dx = px - LX, dy = py - LY, d = Math.hypot(dx, dy) || 1, o = h * (.6 + Math.min(1, d / 900));
+    x.save(); x.shadowColor = "rgba(6,2,0,.55)"; x.shadowBlur = 3 + h * 1.4; x.shadowOffsetX = dx / d * o; x.shadowOffsetY = dy / d * o; draw(); x.restore(); };
+  const at = (x, px, py, a, f) => { x.save(); x.translate(px, py); x.rotate(a); f(); x.restore(); };
+  const cyl = (x, x0, y0, w, h, stops) => { const g = x.createLinearGradient(0, y0, 0, y0 + h); stops.forEach(([o, c]) => g.addColorStop(o, c)); x.fillStyle = g; x.fillRect(x0, y0, w, h); };
+
+  const mat = (x, cx, cy, w, h, a, r) => {
+    const [c, ink] = MAT;
+    shadowed(x, cx, cy, 3, () => at(x, cx, cy, a, () => { x.fillStyle = `rgb(${c})`; x.beginPath(); x.roundRect(-w / 2, -h / 2, w, h, 10); x.fill(); }));
+    at(x, cx, cy, a, () => {
+      x.save(); x.beginPath(); x.roundRect(-w / 2, -h / 2, w, h, 10); x.clip();
+      x.drawImage(field(w, h, 2, (px, py) => { const m = fbm(px / 260, py / 260, 5) * .5 + fbm(px / 16, py / 16, 8, 2) * .2; return [c[0] * (1 + m * .35), c[1] * (1 + m * .35), c[2] * (1 + m * .35)]; }), -w / 2, -h / 2, w, h);
+      const cm = Math.max(18, Math.min(26, w / 22)), m0 = cm * 1.3, X0 = -w / 2 + m0, Y0 = -h / 2 + m0, X1 = w / 2 - cm * .6, Y1 = h / 2 - cm * .6;
+      x.save(); x.beginPath(); x.rect(X0, Y0, X1 - X0, Y1 - Y0); x.clip();
+      for (let i = 0; X0 + i * cm < X1; i++) { const b = i % 5 === 0; x.fillStyle = `rgba(${ink},${b ? .3 : .13})`; x.fillRect(X0 + i * cm - (b ? .6 : .4), Y0, b ? 1.2 : .8, Y1 - Y0); }
+      for (let j = 0; Y0 + j * cm < Y1; j++) { const b = j % 5 === 0; x.fillStyle = `rgba(${ink},${b ? .3 : .13})`; x.fillRect(X0, Y0 + j * cm - (b ? .6 : .4), X1 - X0, b ? 1.2 : .8); }
+      x.strokeStyle = `rgba(${ink},.1)`; x.lineWidth = .8;
+      for (let d = 0; d < w + h; d += cm * 10) { x.beginPath(); x.moveTo(X0 + d, Y0); x.lineTo(X0 + d - h, Y0 + h); x.stroke(); x.beginPath(); x.moveTo(X0 + d - h, Y0); x.lineTo(X0 + d, Y0 + h); x.stroke(); }
+      x.restore();
+      x.fillStyle = `rgba(${ink},.42)`; x.font = `500 ${Math.round(cm * .36)}px "Chakra Petch", sans-serif`; x.textAlign = "center"; x.textBaseline = "middle";
+      for (let i = 0; X0 + i * cm < X1; i++) i % 5 ? x.fillRect(X0 + i * cm - .4, Y0 - cm * .3, .8, cm * .2) : x.fillText(String(i), X0 + i * cm, Y0 - cm * .6);
+      for (let j = 5; Y0 + j * cm < Y1; j += 5) x.fillText(String(j), X0 - cm * .65, Y0 + j * cm);
+      x.lineCap = "round";
+      for (let i = 0; i < 12; i++) { const px = (r() - .5) * w, py = (r() - .5) * h, a2 = r() < .6 ? Math.round(r() * 4) * Math.PI / 4 : r() * 6.3, L = 15 + r() * 70, ex = px + Math.cos(a2) * L, ey = py + Math.sin(a2) * L;
+        x.strokeStyle = `rgba(4,8,12,${.14 + r() * .14})`; x.lineWidth = .7; x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke();
+        x.strokeStyle = `rgba(${ink},${.08 + r() * .08})`; x.lineWidth = .6; x.beginPath(); x.moveTo(px + .9, py + .9); x.lineTo(ex + .9, ey + .9); x.stroke(); }
+      // the mat's cut edge catches the lamp
+      x.restore(); x.strokeStyle = "rgba(255,255,255,.12)"; x.lineWidth = 1; x.beginPath(); x.roundRect(-w / 2 + .5, -h / 2 + .5, w - 1, h - 1, 10); x.stroke();
+    });
+  };
+
+  // a hexagonal pencil, sharpened, seen from above: three visible facets
+  const pencil = (x, px, py, a, L) => {
+    const w = 8, tip = 26, fer = 13, er = 11, body = L - tip - fer - er;
+    shadowed(x, px, py, 4, () => at(x, px, py, a, () => { x.fillStyle = "#000"; x.beginPath(); x.moveTo(-L / 2, 0); x.lineTo(-L / 2 + tip, -w / 2); x.lineTo(L / 2, -w / 2); x.lineTo(L / 2, w / 2); x.lineTo(-L / 2 + tip, w / 2); x.fill(); }));
+    at(x, px, py, a, () => {
+      const x0 = -L / 2 + tip;
+      cyl(x, x0, -w / 2, body, w, [[0, "#f0b13a"], [.33, "#f0b13a"], [.34, "#d7901c"], [.66, "#d7901c"], [.67, "#a8660f"], [1, "#a8660f"]]);
+      x.fillStyle = "rgba(40,20,0,.55)"; x.font = `600 5px "Chakra Petch", sans-serif`; x.textBaseline = "middle"; x.fillText("HB · 2133", x0 + body * .55, .3);
+      x.fillStyle = "#e3c39a"; x.beginPath(); x.moveTo(x0, -w / 2); for (let i = 0; i <= 6; i++) x.lineTo(x0 + Math.sin(i * 1.7) * 1.6 - (i % 2 ? 2 : 0), -w / 2 + w * i / 6); x.lineTo(-L / 2 + 6, 1.4); x.lineTo(-L / 2 + 6, -1.4); x.closePath(); x.fill();
+      x.fillStyle = "rgba(120,80,40,.35)"; x.beginPath(); x.moveTo(x0, w / 6); x.lineTo(-L / 2 + 6, 1.4); x.lineTo(x0, w / 2); x.fill();
+      x.fillStyle = "#2b2b2b"; x.beginPath(); x.moveTo(-L / 2 + 7, -1.6); x.lineTo(-L / 2, 0); x.lineTo(-L / 2 + 7, 1.6); x.fill();
+      const f0 = x0 + body; cyl(x, f0, -w / 2 - .4, fer, w + .8, [[0, "#6d6a64"], [.3, "#e9e5dd"], [.55, "#a7a39b"], [1, "#55524d"]]);
+      x.fillStyle = "rgba(0,0,0,.25)"; for (let i = 2; i < fer; i += 3) x.fillRect(f0 + i, -w / 2, .7, w);
+      cyl(x, f0 + fer, -w / 2 + .3, er, w - .6, [[0, "#e7958d"], [.4, "#f3b2a8"], [1, "#b8665e"]]);
+    });
+  };
+  // a craft knife: knurled aluminium handle, collet, blade
+  const knife = (x, px, py, a, L) => {
+    const w = 9, bl = 22, col = 12, hd = L - bl - col;
+    shadowed(x, px, py, 4, () => at(x, px, py, a, () => { x.fillStyle = "#000"; x.fillRect(-L / 2 + bl, -w / 2, hd + col, w); x.beginPath(); x.moveTo(-L / 2 + bl, -3); x.lineTo(-L / 2, 3); x.lineTo(-L / 2 + bl, 3); x.fill(); }));
+    at(x, px, py, a, () => {
+      const h0 = -L / 2 + bl + col;
+      cyl(x, h0, -w / 2, hd, w, [[0, "#4a4b4e"], [.28, "#d8dadd"], [.5, "#9fa2a6"], [1, "#3c3d40"]]);
+      x.strokeStyle = "rgba(0,0,0,.28)"; x.lineWidth = .5; for (let i = 6; i < hd * .45; i += 2.2) { x.beginPath(); x.moveTo(h0 + i, -w / 2); x.lineTo(h0 + i + 2.5, w / 2); x.stroke(); }
+      cyl(x, -L / 2 + bl, -w / 2 - 1, col, w + 2, [[0, "#3a3b3e"], [.3, "#c9ccd0"], [1, "#2f3033"]]);
+      x.fillStyle = "#c9cdd2"; x.beginPath(); x.moveTo(-L / 2 + bl, -2.6); x.lineTo(-L / 2, 2.6); x.lineTo(-L / 2 + bl, 2.6); x.fill();
+      x.strokeStyle = "rgba(255,255,255,.8)"; x.lineWidth = .6; x.beginPath(); x.moveTo(-L / 2 + .5, 2.4); x.lineTo(-L / 2 + bl, 2.4); x.stroke();
+    });
+  };
+  // a steel ruler with mm ticks
+  const ruler = (x, px, py, a, L) => {
+    const w = 24;
+    shadowed(x, px, py, 2, () => at(x, px, py, a, () => { x.fillStyle = "#000"; x.fillRect(-L / 2, -w / 2, L, w); }));
+    at(x, px, py, a, () => {
+      cyl(x, -L / 2, -w / 2, L, w, [[0, "#8d8b87"], [.15, "#d9d6d0"], [.5, "#b3b0aa"], [1, "#7a7873"]]);
+      x.fillStyle = "rgba(255,255,255,.08)"; for (let i = 0; i < L; i += 3) x.fillRect(-L / 2 + i, -w / 2, 1, w);
+      x.fillStyle = "#26231f"; x.font = `500 6px "Chakra Petch", sans-serif`; x.textAlign = "center"; x.textBaseline = "top";
+      const mm = 3.2; for (let i = 0; i * mm < L - 14; i++) { const t = i % 10 === 0 ? 7 : i % 5 === 0 ? 5 : 3; x.fillRect(-L / 2 + 6 + i * mm, -w / 2, .55, t); if (i % 10 === 0) x.fillText(String(i / 10), -L / 2 + 6 + i * mm, -w / 2 + 8); }
+      x.fillStyle = "rgba(20,16,12,.8)"; x.beginPath(); x.arc(L / 2 - 9, 3, 3, 0, 7); x.fill();
+    });
+  };
+  const paperclip = (x, px, py, a) => {
+    const p = new Path2D("M -14 -3 L 10 -3 A 3 3 0 0 1 10 3 L -11 3 A 1.8 1.8 0 0 1 -11 -0.6 L 7 -0.6");
+    const draw = (sc) => at(x, px, py, a, () => { x.lineCap = "round"; x.lineJoin = "round"; x.stroke(p); });
+    shadowed(x, px, py, 1.5, () => { x.strokeStyle = "rgba(0,0,0,.9)"; x.lineWidth = 1.3; draw(); });
+    x.strokeStyle = "#b9bcc0"; x.lineWidth = 1.3; draw(); x.strokeStyle = "rgba(255,255,255,.7)"; x.lineWidth = .45; draw();
+  };
+  const binder = (x, px, py, a) => {
+    shadowed(x, px, py, 3, () => at(x, px, py, a, () => { x.fillStyle = "#111"; x.fillRect(-16, -11, 32, 22); }));
+    at(x, px, py, a, () => {
+      cyl(x, -16, -11, 32, 22, [[0, "#3a3a3c"], [.45, "#141415"], [1, "#050505"]]);
+      x.strokeStyle = "#c4c6c9"; x.lineWidth = 1.4; x.lineJoin = "round";
+      x.beginPath(); x.moveTo(-10, -11); x.lineTo(-8, -26); x.lineTo(8, -26); x.lineTo(10, -11); x.stroke();
+      x.strokeStyle = "rgba(255,255,255,.6)"; x.lineWidth = .4; x.beginPath(); x.moveTo(-8, -26); x.lineTo(8, -26); x.stroke();
+    });
+  };
+  // the anglepoise from directly above: a heavy round base, two arm struts with springs, the shade's domed back
+  const lamp = (x, sx, sy, R, bx, by) => {
+    shadowed(x, bx, by, 6, () => { x.fillStyle = "#000"; x.beginPath(); x.arc(bx, by, R * .55, 0, 7); x.fill(); });
+    let g = x.createRadialGradient(bx - R * .2, by - R * .2, R * .05, bx, by, R * .55); g.addColorStop(0, "#5a5754"); g.addColorStop(1, "#1d1c1b");
+    x.fillStyle = g; x.beginPath(); x.arc(bx, by, R * .55, 0, 7); x.fill();
+    const jx = mix(bx, sx, .5), jy = Math.max(by, sy) + R * .75;
+    shadowed(x, jx, jy, 10, () => { x.strokeStyle = "#000"; x.lineWidth = 5; x.beginPath(); x.moveTo(bx, by); x.lineTo(jx, jy); x.lineTo(sx, sy); x.stroke(); });
+    for (const o of [-3, 3]) { x.strokeStyle = "#2c2b2a"; x.lineWidth = 2.4; x.beginPath(); x.moveTo(bx + o, by); x.lineTo(jx + o, jy); x.lineTo(sx + o, sy); x.stroke(); }
+    x.strokeStyle = "rgba(220,215,205,.6)"; x.lineWidth = .7; x.beginPath(); x.moveTo(bx - 3, by - 1); x.lineTo(jx - 3, jy - 1); x.stroke();
+    x.strokeStyle = "rgba(170,165,155,.8)"; x.lineWidth = 1; x.beginPath(); for (let i = 0; i <= 30; i++) { const t = .2 + i / 30 * .5, ax = mix(bx, jx, t), ay = mix(by, jy, t); x.lineTo(ax + Math.sin(i * 2.1) * 3.5, ay + Math.cos(i * 2.1) * 3.5); } x.stroke();
+    x.fillStyle = "#3b3a38"; x.beginPath(); x.arc(jx, jy, 5, 0, 7); x.fill();
+    let sp = x.createRadialGradient(sx, sy + R * .5, R * .6, sx, sy + R * .5, R * 1.6); sp.addColorStop(0, "rgba(255,214,150,.5)"); sp.addColorStop(1, "rgba(255,214,150,0)");
+    x.globalCompositeOperation = "screen"; x.fillStyle = sp; x.fillRect(sx - R * 2, sy - R, R * 4, R * 3.2); x.globalCompositeOperation = "source-over";   // light spilling from under the lip
+    shadowed(x, sx, sy, 16, () => { x.fillStyle = "#000"; x.beginPath(); x.arc(sx, sy, R, 0, 7); x.fill(); });
+    g = x.createRadialGradient(sx - R * .3, sy + R * .3, R * .02, sx, sy, R * 1.05); g.addColorStop(0, "#8a857e"); g.addColorStop(.3, "#46433f"); g.addColorStop(.8, "#1f1e1c"); g.addColorStop(1, "#121110");
+    x.fillStyle = g; x.beginPath(); x.arc(sx, sy, R, 0, 7); x.fill();
+    x.strokeStyle = "rgba(255,236,200,.55)"; x.lineWidth = 2.2; x.beginPath(); x.arc(sx, sy, R - 1, Math.PI * .1, Math.PI * .9); x.stroke();   // the lit lip of the shade
+    x.fillStyle = "#4a4845"; x.beginPath(); x.arc(sx, sy, R * .16, 0, 7); x.fill();
+  };
+
+  let r = rng(19), lastW = 0, lastH = 0, url = null;
   const build = () => {
     const W = card.clientWidth, H = card.clientHeight; if (!W || !H) return;
-    if (Math.abs(W - lastW) < 2 && url) return; lastW = W;
+    if (Math.abs(W - lastW) < 2 && Math.abs(H - lastH) < 2 && url) return; lastW = W; lastH = H; r = rng(19);
+    const cr = card.getBoundingClientRect(), rel = el => { const b = el.getBoundingClientRect(); return { x: b.left - cr.left, y: b.top - cr.top, w: b.width, h: b.height, r: b.right - cr.left, b: b.bottom - cr.top }; };
+    const M = rel(card.querySelector(".mark")), T = rel(card.querySelector(".mark + div")), one = T.y > M.b - 2;   // one column (phones)
     const k = Math.min(2, devicePixelRatio || 1), c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k);
     const x = c.getContext("2d"); x.scale(k, k);
-    const L = DESKS[DESK](x, W, H, k);
-    // the overhead lamp: a warm pool of light, and the desk falling away into the dark round it
-    const [lx, ly, lc, lr] = L.lamp, R = Math.hypot(W, H) * .62 * lr;
-    let g = x.createRadialGradient(W * lx, H * ly, 0, W * lx, H * ly, R); g.addColorStop(0, lc); g.addColorStop(1, "rgba(0,0,0,0)");
-    x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.globalCompositeOperation = "screen"; x.globalAlpha = .45; x.fillRect(0, 0, W, H);
-    x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
-    g = x.createRadialGradient(W * lx, H * ly, R * .35, W * lx, H * ly, Math.hypot(W, H) * 1.05); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, L.vig);
+    walnut(x, W, H, k);
+    const R = Math.max(48, Math.min(92, Math.min(W, H) * .17));
+    // the shade hangs over the top edge above the mat, up and left of the paper (where the 3D ball's light comes from); its
+    // base stands off the card, up and right, so the arm crosses the wood
+    const sx = M.x + M.w * (one ? .22 : .3), sy = -R * .28; LX = sx + R * .15; LY = sy + R * 1.5;
+    // the lamp's pool of light on the desk, and the desk falling into the dark round it
+    const pool = () => { const P = Math.max(W, H) * .75; let g = x.createRadialGradient(LX, LY, 0, LX, LY, P); g.addColorStop(0, "rgba(255,190,120,.85)"); g.addColorStop(.45, "rgba(255,170,100,.25)"); g.addColorStop(1, "rgba(0,0,0,0)");
+      x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(0, 0, W, H);
+      g = x.createRadialGradient(LX, LY, 0, LX, LY, P * .45); g.addColorStop(0, "rgba(255,200,140,.16)"); g.addColorStop(1, "rgba(255,200,140,0)");
+      x.globalCompositeOperation = "screen"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.globalCompositeOperation = "source-over"; };
+    let g;
+    // mat under the paper, a little askew, bigger than the paper and running off the card's edge
+    const mw = one ? W * 1.02 : M.w * 1.16, mh = one ? M.h * 1.12 : Math.max(M.h * 1.1, H * .9);
+    mat(x, one ? W * .52 : M.x + M.w / 2 - M.w * .02, one ? M.y + M.h * .5 : M.y + M.h / 2 + H * .06, mw, mh, -.03, r);
+    if (one) {
+      knife(x, W * .78, M.b + 8, -.35, 110);
+      paperclip(x, W - 30, T.b + 18, .4); paperclip(x, W - 52, T.b + 22, -.2);
+      ruler(x, W * .5, Math.min(H - 8, T.b + 20), .02, W * .7);
+      pencil(x, W * .2, M.b - 30, -.45, 120);   // on the mat: below the text there's only room for the ruler
+    } else {
+      const free = H - T.b, rx = T.x + Math.min(T.w, 380) / 2;
+      if (free > 46) ruler(x, rx, T.b + free * .52, .015, Math.min(T.w, 380));
+      pencil(x, T.r + (W - T.r) * .55, H * .58, 1.38, Math.min(190, H * .42));
+      knife(x, M.x + M.w * .2, M.b - 6, .6, 118);
+      paperclip(x, T.x + 30, T.y - 42, .3); paperclip(x, T.x + 58, T.y - 30, -.5); paperclip(x, W - 60, H - 34, 1.1);
+      binder(x, W - 54, 54, .35);
+    }
+    pool();   // the light lands on everything on the desk, under the lamp itself
+    lamp(x, sx, sy, R, sx + R * 2.9, -R * .55);
+    g = x.createRadialGradient(LX, LY, Math.min(W, H) * .3, LX, LY, Math.hypot(W, H) * 1.05); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(8,3,1,.6)");
     x.fillStyle = g; x.fillRect(0, 0, W, H);
     url = c.toDataURL("image/jpeg", .88);
     card.style.backgroundImage = `url("${url}")`; card.style.backgroundSize = `${W}px ${H}px`;
   };
   const go = () => requestAnimationFrame(build);
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(go);
-  let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(build, 200); });
-  new ResizeObserver(() => { clearTimeout(t); t = setTimeout(build, 200); }).observe(card);
+  let t; const later = () => { clearTimeout(t); t = setTimeout(build, 200); };
+  addEventListener("resize", later); new ResizeObserver(later).observe(card);
 })();
 </script>
 <script type="module">
