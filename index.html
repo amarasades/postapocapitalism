@@ -1841,20 +1841,25 @@
 </script>
 <script type="module">
 /* ---------- PAC3D: the stamp is a real 3D sheet of paper (three.js) ----------
-   closed: a crumpled paper ball sitting on the letter. hover (desktop), tap, or scrolling it into view (touch) and it
-   unfolds into a torn, still-creased sheet with the PAC mark hammered into it like a petroglyph. leaving re-crumples it.
-   - the paper texture (grain, mark, torn outline as alpha) is drawn in a 2D canvas: no svg, no images (CLAUDE.md §2b).
-     it is also the fallback when WebGL or the three.js download fails: the open sheet, flat
-   - one mesh, 72×56 quads. every vertex has a flat spot (with a little residual crumple) and a spot in the ball: its
-     direction from the ball's centre is a smooth random field over the sheet, so neighbours stay neighbours but the
-     sheet wraps round several times, folding wherever the field turns back (that's what crumpling is). the depth
-     varies too, so it's a solid wad of layers, not a hollow shell. flatShading gives every triangle its own facet
-   - renders only while moving (and once on resize). preserveDrawingBuffer: the iPhone nav glass (NAVTEXT) copies this
-     canvas with drawImage, which reads back blank without it */
+   closed: a crumpled paper ball on the letter. hover (desktop), tap, or scrolling it into view (touch) and it unfolds into
+   the creased sheet with the PAC mark pecked into it. leaving re-crumples it.
+   ONE crease network drives everything (owner, Nov 26: the ball had "50,000 more" wrinkles than the open sheet and
+   looked like fluid; fold it along the open sheet's own lines):
+   - creaseDesign(): the lines. a few long folds right across, a few hubs with rays (where a crumple's creases meet),
+     striated bundles of near-parallel short creases, loose short ones. each has its own stiffness (some fold hard and
+     stay sharp, some barely) and its own ink strength in the texture
+   - foldSheet() (a Web Worker): a mesh that follows those lines (points sampled along every crease + boundary + fill,
+     Delaunay-triangulated). every interior mesh edge gets a hinge: rigid unless it lies ON a crease line. so the paper
+     is a set of flat facets that can only bend at the creases. it's then squeezed into a ball (inextensible edges,
+     self-repulsion, a shrinking off-centre sphere behind it) and every stage is recorded. the open sheet is that ball
+     pulled almost flat again, so the creases you see open are the ones the ball was folded along
+   - the paper texture (grain, crease lines, mark, a barely-ragged edge as alpha) is a 2D canvas: no svg, no images
+     (CLAUDE.md §2b). also the fallback when WebGL or the three.js download fails
+   - renders only while moving. preserveDrawingBuffer: the iPhone nav glass (NAVTEXT) copies this canvas with drawImage */
 const mark = document.querySelector(".paper .mark");
 if (mark) {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, hover = matchMedia("(hover: hover)").matches;
-  const SW = 4, SH = 3.1;                                    // the sheet, in world units (the view is 5.2 × 4.2)
+  const SW = 4, SH = 3.1, STAGES = 16;                       // the sheet, in world units (the view is 5.2 × 4.2)
   const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
   const noise1 = (r, n) => { const v = []; for (let i = 0; i < n; i++) v.push(r() * 2 - 1);
     return t => { t = ((t % 1) + 1) % 1 * n; const i = Math.floor(t), f = t - i, s = f * f * (3 - 2 * f); return v[i % n] * (1 - s) + v[(i + 1) % n] * s; }; };
@@ -1862,28 +1867,153 @@ if (mark) {
   const vnoise = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
     return (hash(i, j, c) * (1 - sx) + hash(i + 1, j, c) * sx) * (1 - sy) + (hash(i, j + 1, c) * (1 - sx) + hash(i + 1, j + 1, c) * sx) * sy; };
 
-  // ---- the paper texture: grain, the pecked PAC, a torn outline (alpha). 1024 × 794
-  function paperTexture() {
+  // ---- the crease lines, in sheet coordinates (x ±2, y ±1.55). k = hinge stiffness (0 folds freely), ink = how
+  // visible the line is in the paper
+  function creaseDesign(seed) {
+    const r = rng(seed), out = [], hx = SW / 2 - .02, hy = SH / 2 - .02;
+    const clip = (a, b) => {   // Liang–Barsky against the sheet
+      let t0 = 0, t1 = 1; const dx = b[0] - a[0], dy = b[1] - a[1];
+      for (const [p, q] of [[-dx, a[0] + hx], [dx, hx - a[0]], [-dy, a[1] + hy], [dy, hy - a[1]]]) {
+        if (Math.abs(p) < 1e-9) { if (q < 0) return null; continue; } const t = q / p; if (p < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); }
+      return t0 < t1 ? [[a[0] + dx * t0, a[1] + dy * t0], [a[0] + dx * t1, a[1] + dy * t1]] : null; };
+    const add = (a, b, k, ink) => { const c = clip(a, b); if (c && Math.hypot(c[1][0] - c[0][0], c[1][1] - c[0][1]) > .12) out.push({ a: c[0], b: c[1], k, ink }); };
+    const ray = (p, ang, len) => [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len];
+    const pt = () => [(r() - .5) * SW * .9, (r() - .5) * SH * .9];
+    // long folds right across: the sharpest, folded hardest
+    for (let i = 0; i < 5; i++) { const p = pt(), a = r() * Math.PI; add(ray(p, a, 6), ray(p, a + Math.PI, 6), r() * .05, .8 + r() * .2); }
+    // hubs: 3–5 rays from a point, where creases meet
+    for (let h = 0; h < 6; h++) { const p = pt(), n = 3 + (r() * 3 | 0), a0 = r() * 6.283;
+      for (let i = 0; i < n; i++) add(p, ray(p, a0 + i * 6.283 / n + (r() - .5) * .9, .5 + r() * 1.1), .02 + r() * .12, .45 + r() * .45); }
+    // striated bundles: near-parallel short creases close together
+    for (let b = 0; b < 5; b++) { const p = pt(), a = r() * Math.PI, n = 3 + (r() * 4 | 0), len = .35 + r() * .6;
+      for (let i = 0; i < n; i++) { const o = (i - n / 2) * (.05 + r() * .03), q = [p[0] - Math.sin(a) * o + (r() - .5) * .1, p[1] + Math.cos(a) * o], aa = a + (r() - .5) * .08, l = len * (.6 + r() * .5);
+        add(ray(q, aa, l / 2), ray(q, aa + Math.PI, l / 2), .1 + r() * .2, .3 + r() * .4); } }
+    // loose short ones
+    for (let i = 0; i < 14; i++) { const p = pt(), a = r() * Math.PI, l = .25 + r() * .55; add(ray(p, a, l / 2), ray(p, a + Math.PI, l / 2), .08 + r() * .25, .25 + r() * .4); }
+    return out;
+  }
+
+  // ---- the mesh along the creases, and the crumple. self-contained so it can run in a Worker
+  function foldSheet(lines, SW, SH, STAGES) {
+    const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
+    const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
+    const vnoise = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+      return (hash(i, j, c) * (1 - sx) + hash(i + 1, j, c) * sx) * (1 - sy) + (hash(i, j + 1, c) * (1 - sx) + hash(i + 1, j + 1, c) * sx) * sy; };
+    const r = rng(31), X = [], Y = [], LN = [], IX = [], G = new Map(), GC = .06;
+    const near = (x, y, d) => { const ci = Math.floor(x / GC), cj = Math.floor(y / GC);
+      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (const k of G.get(i * 7919 + j) || []) if (Math.hypot(X[k] - x, Y[k] - y) < d) return true; return false; };
+    const put = (x, y, l, ix, d) => { if (near(x, y, d)) return; const k = X.length; X.push(x); Y.push(y); LN.push(l); IX.push(ix);
+      const key = Math.floor(x / GC) * 7919 + Math.floor(y / GC); (G.get(key) || G.set(key, []).get(key)).push(k); };
+    const hx = SW / 2, hy = SH / 2;
+    for (const [x, y] of [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]]) put(x, y, -1, 0, .01);
+    for (let s = .075; s < SW; s += .075) { put(-hx + s, -hy + r() * .004, -1, 0, .03); put(-hx + s, hy - r() * .004, -1, 0, .03); }
+    for (let s = .075; s < SH; s += .075) { put(-hx + r() * .004, -hy + s, -1, 0, .03); put(hx - r() * .004, -hy + s, -1, 0, .03); }
+    lines.forEach((L, l) => { const len = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]), n = Math.max(2, Math.ceil(len / .062));
+      for (let i = 0; i <= n; i++) put(L.a[0] + (L.b[0] - L.a[0]) * i / n, L.a[1] + (L.b[1] - L.a[1]) * i / n, l, i, .03); });
+    for (let t = 0; t < 9000; t++) put((r() - .5) * (SW - .06), (r() - .5) * (SH - .06), -2, 0, .15);
+    const N = X.length;
+    // Delaunay (Bowyer–Watson), with a super-triangle
+    const PX = X.concat([0, -40, 40]), PY = Y.concat([40, -30, -30]);
+    let T = [[N, N + 1, N + 2]];
+    const circ = t => { const [a, b, c] = t, ax = PX[a], ay = PY[a], bx = PX[b], by = PY[b], cx = PX[c], cy = PY[c], d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+      const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d, uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
+      t.cx = ux; t.cy = uy; t.r2 = (ax - ux) ** 2 + (ay - uy) ** 2; return t; };
+    circ(T[0]);
+    for (let p = 0; p < N; p++) {
+      const x = PX[p], y = PY[p], bad = [], keep = [];
+      for (const t of T) ((x - t.cx) ** 2 + (y - t.cy) ** 2 < t.r2 ? bad : keep).push(t);
+      const ec = new Map(); for (const t of bad) for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const k = u < v ? u * 1e5 + v : v * 1e5 + u; ec.set(k, ec.has(k) ? null : [u, v]); }
+      T = keep; for (const e of ec.values()) if (e) T.push(circ([e[0], e[1], p]));
+    }
+    T = T.filter(t => t[0] < N && t[1] < N && t[2] < N);
+    // orient every triangle counter-clockwise (front face = +z = the printed side)
+    const tris = new Uint32Array(T.length * 3);
+    T.forEach((t, i) => { let [a, b, c] = t; if ((X[b] - X[a]) * (Y[c] - Y[a]) - (Y[b] - Y[a]) * (X[c] - X[a]) < 0) [b, c] = [c, b]; tris[3 * i] = a; tris[3 * i + 1] = b; tris[3 * i + 2] = c; });
+    // edges + hinges. a hinge = the two vertices opposite a shared edge; their distance shrinks whenever the edge folds
+    const em = new Map();
+    for (let i = 0; i < T.length; i++) { const a = tris[3 * i], b = tris[3 * i + 1], c = tris[3 * i + 2];
+      for (const [u, v, w] of [[a, b, c], [b, c, a], [c, a, b]]) { const k = u < v ? u * 1e5 + v : v * 1e5 + u; const e = em.get(k); if (e) e.push(w); else em.set(k, [u, v, w]); } }
+    const E = [], H = [], HK = [];
+    const crease = (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2;
+    for (const e of em.values()) { E.push(e[0], e[1]); if (e.length === 4) { H.push(e[2], e[3]); HK.push(crease(e[0], e[1]) ? lines[LN[e[0]]].k : 1); } }
+    const rest = (A, n) => { const L = new Float32Array(n); for (let i = 0; i < n; i++) L[i] = Math.hypot(X[A[2 * i]] - X[A[2 * i + 1]], Y[A[2 * i]] - Y[A[2 * i + 1]]); return L; };
+    const NE = E.length / 2, NH = H.length / 2, LE = rest(E, NE), LH = rest(H, NH);
+    const P = new Float32Array(N * 3); for (let i = 0; i < N; i++) { P[3 * i] = X[i]; P[3 * i + 1] = Y[i]; }
+    const solve = () => {
+      for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
+        P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; }
+      for (let e = 0; e < NH; e++) { const k = HK[e]; if (k < .01) continue; const a = H[2 * e] * 3, b = H[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6;
+        if (d >= LH[e]) continue; const c = (d - LH[e]) / d * .5 * k; P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
+    // self-repulsion (spatial hash), skipping pairs that are neighbours on the flat sheet
+    const HS = 1 << 14, head = new Int32Array(HS), next = new Int32Array(N), CELL = .06, DMIN = .055;
+    const key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & (HS - 1);
+    const repel = () => { head.fill(-1);
+      for (let i = 0; i < N; i++) { const k = key(Math.floor(P[3 * i] / CELL), Math.floor(P[3 * i + 1] / CELL), Math.floor(P[3 * i + 2] / CELL)); next[i] = head[k]; head[k] = i; }
+      for (let i = 0; i < N; i++) { const cx = Math.floor(P[3 * i] / CELL), cy = Math.floor(P[3 * i + 1] / CELL), cz = Math.floor(P[3 * i + 2] / CELL);
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (let j = head[key(cx + a, cy + b, cz + c)]; j >= 0; j = next[j]) {
+          if (j <= i || Math.hypot(X[i] - X[j], Y[i] - Y[j]) < .2) continue;
+          const dx = P[3 * j] - P[3 * i], dy = P[3 * j + 1] - P[3 * i + 1], dz = P[3 * j + 2] - P[3 * i + 2], d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= DMIN * DMIN || d2 < 1e-12) continue; const d = Math.sqrt(d2), c2 = (DMIN - d) / d * .5;
+          P[3 * i] -= dx * c2; P[3 * i + 1] -= dy * c2; P[3 * i + 2] -= dz * c2; P[3 * j] += dx * c2; P[3 * j + 1] += dy * c2; P[3 * j + 2] += dz * c2; } } };
+    // the squeeze: a sphere the sheet is wrapped round, centre behind the sheet and off to one side, shrinking from huge
+    // to the ball. a small kick out of plane each stage decides which way each crease goes
+    const snaps = [], rr = rng(77), R0 = 7, Rmin = .8;
+    for (let s = 1; s < STAGES; s++) {
+      const t = s / (STAGES - 1), R = Rmin + (R0 - Rmin) * Math.pow(1 - t, 2.2);
+      const sx = 1 + .14 * Math.sin(s * 1.7), sy = 1 + .14 * Math.cos(s * 2.3), sz = 1 + .12 * Math.sin(s * 3.1);
+      const ox = .9 * (1 - t) * Math.sin(s * .9 + 1), oy = .6 * (1 - t) * Math.cos(s * 1.3), ph = rr() * 10;
+      for (let i = 0; i < N; i++) P[3 * i + 2] += vnoise(P[3 * i] * .8 + ph, P[3 * i + 1] * .8, 60 + s) * .08 * Math.min(1, s / 3);
+      for (let it = 0; it < 40; it++) {
+        for (let i = 0; i < N; i++) { const j = 3 * i, x = (P[j] - ox) / sx, y = (P[j + 1] - oy) / sy, z = (P[j + 2] + R) / sz, d = Math.hypot(x, y, z);
+          if (d > R) { const k = 1 - (1 - R / d) * .5; P[j] = x * k * sx + ox; P[j + 1] = y * k * sy + oy; P[j + 2] = z * k * sz - R; } }
+        solve(); solve(); solve(); if (it % 3 === 2) repel();
+      }
+      let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += P[3 * i]; my += P[3 * i + 1]; mz += P[3 * i + 2]; }
+      mx /= N; my /= N; mz /= N; const Q = Float32Array.from(P); for (let i = 0; i < N; i++) { Q[3 * i] -= mx * t; Q[3 * i + 1] -= my * t; Q[3 * i + 2] -= mz * t; }
+      snaps.push(Q);
+    }
+    // the open sheet: the half-crumpled sheet pulled back flat, stopped short, so the creases it was folded along remain
+    const O = Float32Array.from(snaps[Math.floor(STAGES * .45)]);
+    P.set(O);
+    for (let it = 0; it < 26; it++) { const pull = .1;
+      for (let i = 0; i < N; i++) { P[3 * i] += (X[i] - P[3 * i]) * pull; P[3 * i + 1] += (Y[i] - P[3 * i + 1]) * pull; P[3 * i + 2] *= 1 - pull * 1.2; }
+      solve(); }
+    let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N;
+    for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; P[3 * i + 2] -= zm; }
+    snaps.unshift(Float32Array.from(P));
+    const flat = new Float32Array(N * 2); for (let i = 0; i < N; i++) { flat[2 * i] = X[i]; flat[2 * i + 1] = Y[i]; }
+    return { flat, tris, snaps };
+  }
+
+  // ---- the paper texture: grain, crease lines, the pecked PAC, a barely-ragged edge (alpha). 1024 × 794
+  function paperTexture(lines) {
     const TW = 1024, TH = Math.round(TW * SH / SW), c = document.createElement("canvas"); c.width = TW; c.height = TH;
     const x = c.getContext("2d"), r = rng(11);
-    // torn outline
-    const n1 = noise1(r, 23), n2 = noise1(r, 97), per = 2 * (TW + TH), tears = [], path = new Path2D(), I = 10;
-    for (let i = 0; i < 4; i++) tears.push({ t: r(), w: .006 + r() * .012, d: 14 + r() * 22 });
-    for (let s = 0; s < per; s += 4) {
+    // the edge: no tears (owner), just a fibre-rough cut a few pixels deep
+    const n1 = noise1(r, 31), n2 = noise1(r, 140), per = 2 * (TW + TH), path = new Path2D();
+    for (let s = 0; s < per; s += 3) {
       const t = s / per; let q = s, px, py, nx, ny;
       if (q < TW) { px = q; py = 0; nx = 0; ny = 1; } else if ((q -= TW) < TH) { px = TW; py = q; nx = -1; ny = 0; }
       else if ((q -= TH) < TW) { px = TW - q; py = TH; nx = 0; ny = -1; } else { q -= TW; px = 0; py = TH - q; nx = 1; ny = 0; }
-      let d = I + n1(t) * 7 + n2(t) * 3.5 + (r() - .5) * 3;
-      for (const T of tears) { const u = Math.abs(t - T.t) / T.w; if (u < 1) d += T.d * (1 - u) * (1 - u); }
+      const d = 4 + n1(t) * 1.8 + n2(t) * 1 + (r() - .5) * 1.2;
       s ? path.lineTo(px + nx * d, py + ny * d) : path.moveTo(px + nx * d, py + ny * d);
     }
     path.closePath();
     x.save(); x.clip(path);
     x.fillStyle = "#e8dccb"; x.fillRect(0, 0, TW, TH);
-    // fibres and grain
     const im = x.getImageData(0, 0, TW, TH), d = im.data;
     for (let i = 0; i < d.length; i += 4) { const g = (r() - .5) * 16 + vnoise((i / 4 % TW) / 40, (i / 4 / TW) / 40, 7) * 6; d[i] += g; d[i + 1] += g; d[i + 2] += g * .9; }
     x.putImageData(im, 0, 0);
+    // crease lines: the broken fibres show even where the sheet lies flat. a dark hairline and a light one beside it
+    const tx = ([px, py]) => [(px / SW + .5) * TW, (.5 - py / SH) * TH];
+    x.lineCap = "round";
+    for (const L of lines) { const [a0, a1] = tx(L.a), [b0, b1] = tx(L.b), len = Math.hypot(b0 - a0, b1 - a1), n = Math.ceil(len / 6);
+      for (let i = 0; i < n; i++) { const u0 = i / n, u1 = (i + 1) / n, w = .5 + .5 * Math.sin(Math.PI * (u0 + u1) / 2);   // fades out at the ends
+        const p0 = [a0 + (b0 - a0) * u0, a1 + (b1 - a1) * u0], p1 = [a0 + (b0 - a0) * u1, a1 + (b1 - a1) * u1];
+        x.strokeStyle = `rgba(70,45,25,${.2 * L.ink * w * (.7 + r() * .3)})`; x.lineWidth = .9 + L.ink * .5;
+        x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.stroke();
+        x.strokeStyle = `rgba(255,252,244,${.32 * L.ink * w})`; x.lineWidth = 1;
+        x.beginPath(); x.moveTo(p0[0] + .9, p0[1] + .9); x.lineTo(p1[0] + .9, p1[1] + .9); x.stroke(); } }
     // the mark, in a 520 × 420 box centred on the sheet
     const k = TH / 420 * .82; x.translate(TW / 2 - 266 * k, TH / 2 - 218 * k); x.scale(k, k);
     const arc = (cx, cy, rx, ry, a0, a1, n) => { const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); } return p; };
@@ -1901,76 +2031,22 @@ if (mark) {
     const sp = []; for (let i = 0; i <= 120; i++) { const t = i / 120, a = t * Math.PI * 2 * 2.6; sp.push([462 + Math.cos(a) * (3 + t * 34), 60 + Math.sin(a) * (3 + t * 30)]); }
     peck(sp, 5, 3.4);
     x.restore();
-    // a pale fibrous lip along the tear
-    x.lineWidth = 3; x.strokeStyle = "rgba(255,250,238,.7)"; x.save(); x.clip(path); x.stroke(path); x.restore();
     return c;
   }
 
-  // the crumple simulation, as one self-contained function so it can run in a Worker (it's ~1-2 s of maths on a desktop,
-  // several on a phone: on the main thread that stalled scrolling). see PAC3D below for what it does
-  function crumpleSim(F, NX, NY, SW, STAGES) {
-    const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
-    const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
-    const vnoise = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-      return (hash(i, j, c) * (1 - sx) + hash(i + 1, j, c) * sx) * (1 - sy) + (hash(i, j + 1, c) * (1 - sx) + hash(i + 1, j + 1, c) * sx) * sy; };
-    const N = F.length / 3, snaps = [Float32Array.from(F)];
-    const id = (i, j) => j * (NX + 1) + i, E = [];
-    for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) {
-      if (i < NX) E.push(id(i, j), id(i + 1, j)); if (j < NY) E.push(id(i, j), id(i, j + 1));
-      if (i < NX && j < NY) E.push(id(i, j), id(i + 1, j + 1), id(i + 1, j), id(i, j + 1));
-    }
-    // bending: springs over two cells. stiff at first (the sheet bows and folds in big flaps, like a hand starting a
-    // crumple), gone by the end (the late squeeze makes the sharp small creases)
-    const Bd = []; for (let j = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) { if (i + 2 <= NX) Bd.push(id(i, j), id(i + 2, j)); if (j + 2 <= NY) Bd.push(id(i, j), id(i, j + 2)); if (i + 2 <= NX && j + 2 <= NY) Bd.push(id(i, j), id(i + 2, j + 2), id(i + 2, j), id(i, j + 2)); }
-    // and a long-range set (five cells): it makes the first folds big and few, not a fan of fine pleats
-    for (let j = 0; j <= NY; j += 1) for (let i = 0; i <= NX; i += 1) { if ((i + j) % 2) continue; if (i + 5 <= NX) Bd.push(id(i, j), id(i + 5, j)); if (j + 5 <= NY) Bd.push(id(i, j), id(i, j + 5)); if (i + 4 <= NX && j + 4 <= NY) Bd.push(id(i, j), id(i + 4, j + 4), id(i + 4, j), id(i, j + 4)); }
-    const NB = Bd.length / 2, LB = new Float32Array(NB);
-    for (let e = 0; e < NB; e++) { const a = Bd[2 * e] * 3, b = Bd[2 * e + 1] * 3; LB[e] = Math.hypot(F[a] - F[b], F[a + 1] - F[b + 1], F[a + 2] - F[b + 2]); }
-    // shuffled: solving the edges in row order biases the buckles into rows and columns
-    { const r2 = rng(5); const sh = A => { for (let e = A.length / 2 - 1; e > 0; e--) { const k = r2() * (e + 1) | 0, a = A[2 * e], b = A[2 * e + 1]; A[2 * e] = A[2 * k]; A[2 * e + 1] = A[2 * k + 1]; A[2 * k] = a; A[2 * k + 1] = b; } }; sh(E); sh(Bd); }
-    const NE = E.length / 2, L = new Float32Array(NE);
-    for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3; L[e] = Math.hypot(F[a] - F[b], F[a + 1] - F[b + 1], F[a + 2] - F[b + 2]); }
-    const P = Float32Array.from(F), rr = rng(77), H = 1 << 14, head = new Int32Array(H), next = new Int32Array(N), CELL = .045, DMIN = .04;
-    const gi = new Int32Array(N), gj = new Int32Array(N); for (let i = 0; i < N; i++) { gi[i] = i % (NX + 1); gj[i] = i / (NX + 1) | 0; }
-    const key = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & (H - 1);
-    const solve = () => { for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3;
-      const dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - L[e]) / d * .5;
-      P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
-    const LONG = 3.5 * SW / NX; const bend = (k, k2) => { for (let e = 0; e < NB; e++) { const ke = LB[e] > LONG ? k2 : k; if (ke < .01) continue; const a = Bd[2 * e] * 3, b = Bd[2 * e + 1] * 3;
-      const dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6; if (d >= LB[e]) continue; const c = (d - LB[e]) / d * .5 * ke;
-      P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
-    const repel = () => { head.fill(-1);
-      for (let i = 0; i < N; i++) { const k = key(Math.floor(P[3 * i] / CELL), Math.floor(P[3 * i + 1] / CELL), Math.floor(P[3 * i + 2] / CELL)); next[i] = head[k]; head[k] = i; }
-      for (let i = 0; i < N; i++) { const cx = Math.floor(P[3 * i] / CELL), cy = Math.floor(P[3 * i + 1] / CELL), cz = Math.floor(P[3 * i + 2] / CELL);
-        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (let j = head[key(cx + a, cy + b, cz + c)]; j >= 0; j = next[j]) {
-          if (j <= i || (Math.abs(gi[i] - gi[j]) < 3 && Math.abs(gj[i] - gj[j]) < 3)) continue;
-          const dx = P[3 * j] - P[3 * i], dy = P[3 * j + 1] - P[3 * i + 1], dz = P[3 * j + 2] - P[3 * i + 2], d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 >= DMIN * DMIN || d2 < 1e-12) continue; const d = Math.sqrt(d2), c2 = (DMIN - d) / d * .5;
-          P[3 * i] -= dx * c2; P[3 * i + 1] -= dy * c2; P[3 * i + 2] -= dz * c2; P[3 * j] += dx * c2; P[3 * j + 1] += dy * c2; P[3 * j + 2] += dz * c2; } } };
-    // the hand: a sphere the sheet is wrapped round, its centre BEHIND the sheet. it starts huge (the sheet just cups)
-    // and shrinks to the ball, so the edges fold back and over in big flaps first, then everything is squeezed
-    const R0 = 7, Rmin = .78;
-    for (let s = 1; s < STAGES; s++) {
-      const t = s / (STAGES - 1), R = Rmin + (R0 - Rmin) * Math.pow(1 - t, 2.2), kb = .85 * (1 - .8 * t), kb2 = Math.min(1, 1.3 * Math.pow(1 - t, 1.3));
-      const sx = 1 + .14 * Math.sin(s * 1.7), sy = 1 + .14 * Math.cos(s * 2.3), sz = 1 + .12 * Math.sin(s * 3.1);   // the squeeze is uneven
-      const ox = .9 * (1 - t) * Math.sin(s * .9 + 1), oy = .6 * (1 - t) * Math.cos(s * 1.3);   // and off-centre: the hand grabs one side first
-      const ph = rr() * 10; for (let i = 0; i < N; i++) P[3 * i + 2] += vnoise(P[3 * i] * .7 + ph, P[3 * i + 1] * .7, 60 + s) * (s < 5 ? .3 * Math.min(1, s / 3) : .05) * (1 - .5 * t);
-      for (let it = 0, IT = s < 8 ? 40 : 24; it < IT; it++) {
-        for (let i = 0; i < N; i++) { const j = 3 * i, x = (P[j] - ox) / sx, y = (P[j + 1] - oy) / sy, z = (P[j + 2] + R) / sz, d = Math.hypot(x, y, z);
-          if (d > R) { const k = 1 - (1 - R / d) * .6; P[j] = x * k * sx + ox; P[j + 1] = y * k * sy + oy; P[j + 2] = z * k * sz - R; } }
-        solve(); bend(kb, kb2); solve(); if (it & 1) repel();
-      }
-      // stored centred on the wad, so the ball sits in the middle of the view
-      let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += P[3 * i]; my += P[3 * i + 1]; mz += P[3 * i + 2]; }
-      mx /= N; my /= N; mz /= N; const Q = Float32Array.from(P); for (let i = 0; i < N; i++) { Q[3 * i] -= mx; Q[3 * i + 1] -= my; Q[3 * i + 2] -= mz * t; }
-      snaps.push(Q);
-    }
-    return snaps;
-  }
-
-  const tex2d = paperTexture();
+  const lines = creaseDesign(19), tex2d = paperTexture(lines);
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
   const flatFallback = () => { cv.replaceWith(tex2d); tex2d.className = "pac3d flat"; mark.classList.add("ready"); };
+  // the fold runs in a worker (a second or two of maths; on the main thread it stalled scrolling on phones)
+  const folded = new Promise(res => {
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob([`const foldSheet = ${foldSheet};
+        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES); postMessage(o, [o.flat.buffer, o.tris.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
+      w.onmessage = e => { res(e.data); w.terminate(); };
+      w.onerror = () => { w.terminate(); res(foldSheet(lines, SW, SH, STAGES)); };
+      w.postMessage({ lines, SW, SH, STAGES });
+    } catch (e) { res(foldSheet(lines, SW, SH, STAGES)); }
+  });
 
   const start = async () => {
     let THREE;
@@ -1989,44 +2065,21 @@ if (mark) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial({ opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
+    const { flat, tris, snaps } = await folded, N = flat.length / 2;
+    const geo = new THREE.BufferGeometry(), uv = new Float32Array(N * 2);
+    for (let i = 0; i < N; i++) { uv[2 * i] = flat[2 * i] / SW + .5; uv[2 * i + 1] = flat[2 * i + 1] / SH + .5; }
+    const pos = new THREE.BufferAttribute(new Float32Array(N * 3), 3); pos.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute("position", pos); geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); geo.setIndex(new THREE.BufferAttribute(tris, 1));
     const map = new THREE.CanvasTexture(tex2d); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
     const mat = new THREE.MeshStandardMaterial({ map, roughness: .93, metalness: 0, flatShading: true, side: THREE.DoubleSide, alphaTest: .5 });
     // the back of the sheet is plain paper, no ink showing through
     mat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(.80, .72, .60);"); };
-    const NX = 72, NY = 56, geo = new THREE.PlaneGeometry(SW, SH, NX, NY), pos = geo.attributes.position, N = pos.count;
     const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; scene.add(mesh);
     mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: .5 });
 
-    // per-vertex flat and ball positions
-    const F = new Float32Array(N * 3);
-    const r = rng(23), folds = [];
-    for (let k = 0; k < 64; k++) { const a = r() * Math.PI, big = k < 14; folds.push([(r() - .5) * SW, (r() - .5) * SH, Math.cos(a), Math.sin(a), (big ? 1 : .3) + r() * (big ? 1.2 : .45), (r() - .5) * (big ? .36 : .46)]); }
-    for (let i = 0; i < N; i++) {
-      // the grid is jittered (a regular grid buckles in rows and columns: zig-zags along the mesh axes); the border stays put
-      const gx = i % (NX + 1), gy = i / (NX + 1) | 0, inner = gx > 0 && gx < NX && gy > 0 && gy < NY;
-      if (inner) { pos.setX(i, pos.getX(i) + (hash(gx, gy, 91) * .5) * SW / NX * .7); pos.setY(i, pos.getY(i) + (hash(gx, gy, 92) * .5) * SH / NY * .7); }
-      const px = pos.getX(i), py = pos.getY(i);
-      // the flat sheet keeps its creases: windowed tent folds (sharp ridges), small
-      let z = 0; for (const [cx, cy, nx, ny, w, a] of folds) { const dx = px - cx, dy = py - cy, wd = Math.exp(-(dx * dx + dy * dy) / (w * w)); z += a * wd * Math.abs(dx * nx + dy * ny); }
-      F[i * 3] = px; F[i * 3 + 1] = py; F[i * 3 + 2] = z;
-    }
-    { const uv = geo.attributes.uv; for (let i = 0; i < N; i++) uv.setXY(i, pos.getX(i) / SW + .5, pos.getY(i) / SH + .5); uv.needsUpdate = true; }   // the ink follows the jitter
-    // the crumple is SIMULATED, not posed: the sheet is a net of inextensible edges (paper doesn't stretch) with no bending
-    // stiffness (so it creases sharply), squeezed by a shrinking, wobbling hand-sized ellipsoid, with self-repulsion so the
-    // layers pile up into a solid wad instead of passing through each other. every stage of the squeeze is kept: closing
-    // plays them forward (it really crumples) and opening plays them back (it really uncrumples, creases and all)
-    const STAGES = 16, snaps = await new Promise(res => {
-      try {
-        const w = new Worker(URL.createObjectURL(new Blob([`const crumpleSim = ${crumpleSim};
-          onmessage = e => { const s = crumpleSim(e.data.F, e.data.NX, e.data.NY, e.data.SW, e.data.STAGES); postMessage(s, s.map(a => a.buffer)); };`], { type: "text/javascript" })));
-        w.onmessage = e => { res(e.data); w.terminate(); };
-        w.onerror = () => { w.terminate(); res(crumpleSim(F, NX, NY, SW, STAGES)); };
-        w.postMessage({ F, NX, NY, SW, STAGES });
-      } catch (e) { res(crumpleSim(F, NX, NY, SW, STAGES)); }
-    });
     const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     const pose = o => {
-      // o = 1 open, 0 ball. walk the recorded squeeze; ease in time so it accelerates out of the ball and settles flat
+      // o = 1 open, 0 ball: walk the recorded squeeze. eased, so it bursts out of the ball and settles flat
       const f = (1 - ease(o)) * (STAGES - 1), k = Math.min(STAGES - 2, Math.floor(f)), u = f - k, A = snaps[k], Bs = snaps[k + 1], a = pos.array;
       for (let i = 0; i < a.length; i++) a[i] = A[i] + (Bs[i] - A[i]) * u;
       pos.needsUpdate = true; geo.computeBoundingSphere();
@@ -2037,7 +2090,7 @@ if (mark) {
     let o = reduce ? 1 : 0, target = o, raf = 0, last = 0;
     const draw = () => { pose(o); renderer.render(scene, cam); };
     const step = now => { const dt = Math.min(48, now - last); last = now;
-      o = target > o ? Math.min(target, o + dt / 1400) : Math.max(target, o - dt / 900); draw();
+      o = target > o ? Math.min(target, o + dt / 1600) : Math.max(target, o - dt / 1000); draw();
       if (o === target) { raf = 0; window.__navRedraw && window.__navRedraw(); } else raf = requestAnimationFrame(step); };
     const go = t => { if (reduce) return; target = t; if (!raf && o !== t) { last = performance.now(); raf = requestAnimationFrame(step); } };
     size(); draw(); mark.classList.add("ready");
