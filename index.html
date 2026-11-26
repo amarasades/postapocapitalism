@@ -252,6 +252,13 @@
   .paper.desk { background-color: #2a1a10; border-color: rgba(0,0,0,.35); box-shadow: 0 30px 60px -26px rgba(40,12,2,.75); background-repeat: no-repeat; color: #f4e9da; }
   .paper.desk p { color: rgba(244,233,218,.84); }
   .paper.desk .lbl { color: rgba(244,233,218,.6); }
+  /* the props layer (mat, lamp, knife, clips) overhangs the card; the paper, the text and the pencil sit above it */
+  .paper.scene { position: relative; }
+  .paper.scene .num { color: rgba(244,233,218,.85); }   /* "02" and "RECOVERED" sit on the mat, dark on every desk */
+  .paper.scene > canvas.props { position: absolute; pointer-events: none; z-index: 2; }   /* above the slab's front edge (::after): the mat hangs over it */
+  .paper.scene > .mark, .paper.scene > .mark + div, .paper.scene > canvas.pencil { position: relative; z-index: 3; }
+  .paper.scene > canvas.pencil { position: absolute; }
+  #transmission { overflow-x: clip; }
 
   /* ?desk=4/5/6: the card is a desk top (SLAB script, texture set inline at the card's size) */
   .paper.slab { position: relative; border-color: transparent; background-repeat: no-repeat; }
@@ -1872,18 +1879,22 @@
 })();
 </script>
 <script>
-// ?desk=1/2/3 (owner, Nov 26): the transmission seen from above on a desk, like an overhead shot in a film. walnut, an
-// anglepoise lamp in the top-left corner (where the 3D ball's own light comes from, so every shadow agrees), a cutting
-// mat under the paper, and stationery round the edges. 1 green mat, 2 blue, 3 graphite. comparison only: no parameter =
-// the approved paper card. the whole scene is ONE image baked in a 2D canvas at the card's size × dpr, set as the card's
-// only background with an explicit background-size (the Safari nav redraw copies exactly that), and laid out from the
-// measured positions of the paper and the text, so nothing sits under the words on any screen size.
+// ?desk=1–6 (owner, Nov 26): the transmission seen from above on a desk, like an overhead shot in a film, on EVERY desk
+// (owner: "all desk types, not just the wood"). 1–3 walnut (baked here as the card's background), 4–6 the SLAB surfaces
+// (oak, linoleum, steel; their own script). on all six, a PROPS layer: a cutting mat under the paper, an anglepoise
+// clamped to the desk's top edge, a craft knife, two paperclips, the lamp's pool of light; the pencil is the 3D PENCIL
+// module. owner: the mat, the lamp and its clamp may hang off the desk, so the props are their own canvas, bigger than
+// the card (the iPhone nav redraw copies canvases as they are); shadows land only on the desk, never on the sky. mats:
+// 1 green, 2 blue, 3 graphite, 4 green, 5 blue, 6 graphite; &mat=green|blue|graphite tries another. laid out from the
+// measured paper and text boxes, so nothing sits under the words. no parameter = the approved paper card.
 (() => {
-  const DESK = +new URLSearchParams(location.search).get("desk");
-  if (!(DESK >= 1 && DESK <= 3)) return;
+  const Q = new URLSearchParams(location.search), DESK = +Q.get("desk");
+  if (!(DESK >= 1 && DESK <= 6)) return;
   const card = document.querySelector(".paper"); if (!card) return;
-  card.classList.add("desk", "desk-" + DESK);
-  const MAT = { 1: [[34, 74, 56], "214,236,214"], 2: [[26, 62, 112], "214,228,246"], 3: [[42, 43, 46], "226,226,222"] }[DESK];
+  if (DESK <= 3) card.classList.add("desk", "desk-" + DESK);
+  card.classList.add("scene");
+  const MATS = { green: [[34, 74, 56], "214,236,214"], blue: [[26, 62, 112], "214,228,246"], graphite: [[42, 43, 46], "226,226,222"] };
+  const MAT = MATS[Q.get("mat")] || MATS[["green", "blue", "graphite"][(DESK - 1) % 3]];
   const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
   const hash = (i, j, c) => { let h = (i * 374761393 + j * 668265263 + c * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1; };
   const vn = (x, y, c) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
@@ -1909,16 +1920,17 @@
     for (let yy = plank * .65; yy < H; yy += plank) { x.fillStyle = "rgba(10,4,1,.55)"; x.fillRect(0, yy - 1, W, 1.6); x.fillStyle = "rgba(255,210,160,.08)"; x.fillRect(0, yy + .8, W, 1); }
   };
 
-  // every object casts a soft shadow away from the lamp
-  let LX = 0, LY = 0;
+  // shadows fall on the desk only: drawn as a pure shadow (the shape itself pushed far off-canvas) inside the card's box
+  let LX = 0, LY = 0, W = 0, H = 0, K = 1;
   const shadowed = (x, px, py, h, draw) => { const dx = px - LX, dy = py - LY, d = Math.hypot(dx, dy) || 1, o = h * (.6 + Math.min(1, d / 900));
-    x.save(); x.shadowColor = "rgba(6,2,0,.55)"; x.shadowBlur = 3 + h * 1.4; x.shadowOffsetX = dx / d * o; x.shadowOffsetY = dy / d * o; draw(); x.restore(); };
+    x.save(); x.beginPath(); x.rect(0, 0, W, H); x.clip(); x.translate(-1e4, 0);
+    x.shadowColor = "rgba(6,2,0,.55)"; x.shadowBlur = (3 + h * 1.4) * K; x.shadowOffsetX = (1e4 + dx / d * o) * K; x.shadowOffsetY = dy / d * o * K;
+    x.translate(0, 0); draw(); x.restore(); };
   const at = (x, px, py, a, f) => { x.save(); x.translate(px, py); x.rotate(a); f(); x.restore(); };
   const cyl = (x, x0, y0, w, h, stops) => { const g = x.createLinearGradient(0, y0, 0, y0 + h); stops.forEach(([o, c]) => g.addColorStop(o, c)); x.fillStyle = g; x.fillRect(x0, y0, w, h); };
-
   const mat = (x, cx, cy, w, h, a, r) => {
     const [c, ink] = MAT;
-    shadowed(x, cx, cy, 3, () => at(x, cx, cy, a, () => { x.fillStyle = `rgb(${c})`; x.beginPath(); x.roundRect(-w / 2, -h / 2, w, h, 10); x.fill(); }));
+    shadowed(x, cx, cy, 4, () => at(x, cx, cy, a, () => { x.fillStyle = `rgb(${c})`; x.beginPath(); x.roundRect(-w / 2, -h / 2, w, h, 10); x.fill(); }));
     at(x, cx, cy, a, () => {
       x.save(); x.beginPath(); x.roundRect(-w / 2, -h / 2, w, h, 10); x.clip();
       x.drawImage(field(w, h, 2, (px, py) => { const m = fbm(px / 260, py / 260, 5) * .5 + fbm(px / 16, py / 16, 8, 2) * .2; return [c[0] * (1 + m * .35), c[1] * (1 + m * .35), c[2] * (1 + m * .35)]; }), -w / 2, -h / 2, w, h);
@@ -1941,22 +1953,6 @@
     });
   };
 
-  // a hexagonal pencil, sharpened, seen from above: three visible facets
-  const pencil = (x, px, py, a, L) => {
-    const w = 8, tip = 26, fer = 13, er = 11, body = L - tip - fer - er;
-    shadowed(x, px, py, 4, () => at(x, px, py, a, () => { x.fillStyle = "#000"; x.beginPath(); x.moveTo(-L / 2, 0); x.lineTo(-L / 2 + tip, -w / 2); x.lineTo(L / 2, -w / 2); x.lineTo(L / 2, w / 2); x.lineTo(-L / 2 + tip, w / 2); x.fill(); }));
-    at(x, px, py, a, () => {
-      const x0 = -L / 2 + tip;
-      cyl(x, x0, -w / 2, body, w, [[0, "#f0b13a"], [.33, "#f0b13a"], [.34, "#d7901c"], [.66, "#d7901c"], [.67, "#a8660f"], [1, "#a8660f"]]);
-      x.fillStyle = "rgba(40,20,0,.55)"; x.font = `600 5px "Chakra Petch", sans-serif`; x.textBaseline = "middle"; x.fillText("HB · 2133", x0 + body * .55, .3);
-      x.fillStyle = "#e3c39a"; x.beginPath(); x.moveTo(x0, -w / 2); for (let i = 0; i <= 6; i++) x.lineTo(x0 + Math.sin(i * 1.7) * 1.6 - (i % 2 ? 2 : 0), -w / 2 + w * i / 6); x.lineTo(-L / 2 + 6, 1.4); x.lineTo(-L / 2 + 6, -1.4); x.closePath(); x.fill();
-      x.fillStyle = "rgba(120,80,40,.35)"; x.beginPath(); x.moveTo(x0, w / 6); x.lineTo(-L / 2 + 6, 1.4); x.lineTo(x0, w / 2); x.fill();
-      x.fillStyle = "#2b2b2b"; x.beginPath(); x.moveTo(-L / 2 + 7, -1.6); x.lineTo(-L / 2, 0); x.lineTo(-L / 2 + 7, 1.6); x.fill();
-      const f0 = x0 + body; cyl(x, f0, -w / 2 - .4, fer, w + .8, [[0, "#6d6a64"], [.3, "#e9e5dd"], [.55, "#a7a39b"], [1, "#55524d"]]);
-      x.fillStyle = "rgba(0,0,0,.25)"; for (let i = 2; i < fer; i += 3) x.fillRect(f0 + i, -w / 2, .7, w);
-      cyl(x, f0 + fer, -w / 2 + .3, er, w - .6, [[0, "#e7958d"], [.4, "#f3b2a8"], [1, "#b8665e"]]);
-    });
-  };
   // a craft knife: knurled aluminium handle, collet, blade
   const knife = (x, px, py, a, L) => {
     const w = 9, bl = 22, col = 12, hd = L - bl - col;
@@ -1970,97 +1966,99 @@
       x.strokeStyle = "rgba(255,255,255,.8)"; x.lineWidth = .6; x.beginPath(); x.moveTo(-L / 2 + .5, 2.4); x.lineTo(-L / 2 + bl, 2.4); x.stroke();
     });
   };
-  // a steel ruler with mm ticks
-  const ruler = (x, px, py, a, L) => {
-    const w = 24;
-    shadowed(x, px, py, 2, () => at(x, px, py, a, () => { x.fillStyle = "#000"; x.fillRect(-L / 2, -w / 2, L, w); }));
-    at(x, px, py, a, () => {
-      cyl(x, -L / 2, -w / 2, L, w, [[0, "#8d8b87"], [.15, "#d9d6d0"], [.5, "#b3b0aa"], [1, "#7a7873"]]);
-      x.fillStyle = "rgba(255,255,255,.08)"; for (let i = 0; i < L; i += 3) x.fillRect(-L / 2 + i, -w / 2, 1, w);
-      x.fillStyle = "#26231f"; x.font = `500 6px "Chakra Petch", sans-serif`; x.textAlign = "center"; x.textBaseline = "top";
-      const mm = 3.2; for (let i = 0; i * mm < L - 14; i++) { const t = i % 10 === 0 ? 7 : i % 5 === 0 ? 5 : 3; x.fillRect(-L / 2 + 6 + i * mm, -w / 2, .55, t); if (i % 10 === 0) x.fillText(String(i / 10), -L / 2 + 6 + i * mm, -w / 2 + 8); }
-      x.fillStyle = "rgba(20,16,12,.8)"; x.beginPath(); x.arc(L / 2 - 9, 3, 3, 0, 7); x.fill();
-    });
-  };
   const paperclip = (x, px, py, a) => {
     const p = new Path2D("M -14 -3 L 10 -3 A 3 3 0 0 1 10 3 L -11 3 A 1.8 1.8 0 0 1 -11 -0.6 L 7 -0.6");
     const draw = (sc) => at(x, px, py, a, () => { x.lineCap = "round"; x.lineJoin = "round"; x.stroke(p); });
     shadowed(x, px, py, 1.5, () => { x.strokeStyle = "rgba(0,0,0,.9)"; x.lineWidth = 1.3; draw(); });
     x.strokeStyle = "#b9bcc0"; x.lineWidth = 1.3; draw(); x.strokeStyle = "rgba(255,255,255,.7)"; x.lineWidth = .45; draw();
   };
-  const binder = (x, px, py, a) => {
-    shadowed(x, px, py, 3, () => at(x, px, py, a, () => { x.fillStyle = "#111"; x.fillRect(-16, -11, 32, 22); }));
-    at(x, px, py, a, () => {
-      cyl(x, -16, -11, 32, 22, [[0, "#3a3a3c"], [.45, "#141415"], [1, "#050505"]]);
-      x.strokeStyle = "#c4c6c9"; x.lineWidth = 1.4; x.lineJoin = "round";
-      x.beginPath(); x.moveTo(-10, -11); x.lineTo(-8, -26); x.lineTo(8, -26); x.lineTo(10, -11); x.stroke();
-      x.strokeStyle = "rgba(255,255,255,.6)"; x.lineWidth = .4; x.beginPath(); x.moveTo(-8, -26); x.lineTo(8, -26); x.stroke();
-    });
-  };
-  // the anglepoise from directly above: a heavy round base, two arm struts with springs, the shade's domed back
-  const lamp = (x, sx, sy, R, bx, by) => {
-    shadowed(x, bx, by, 6, () => { x.fillStyle = "#000"; x.beginPath(); x.arc(bx, by, R * .55, 0, 7); x.fill(); });
-    let g = x.createRadialGradient(bx - R * .2, by - R * .2, R * .05, bx, by, R * .55); g.addColorStop(0, "#5a5754"); g.addColorStop(1, "#1d1c1b");
-    x.fillStyle = g; x.beginPath(); x.arc(bx, by, R * .55, 0, 7); x.fill();
-    const jx = mix(bx, sx, .5), jy = Math.max(by, sy) + R * .75;
-    shadowed(x, jx, jy, 10, () => { x.strokeStyle = "#000"; x.lineWidth = 5; x.beginPath(); x.moveTo(bx, by); x.lineTo(jx, jy); x.lineTo(sx, sy); x.stroke(); });
-    for (const o of [-3, 3]) { x.strokeStyle = "#2c2b2a"; x.lineWidth = 2.4; x.beginPath(); x.moveTo(bx + o, by); x.lineTo(jx + o, jy); x.lineTo(sx + o, sy); x.stroke(); }
-    x.strokeStyle = "rgba(220,215,205,.6)"; x.lineWidth = .7; x.beginPath(); x.moveTo(bx - 3, by - 1); x.lineTo(jx - 3, jy - 1); x.stroke();
-    x.strokeStyle = "rgba(170,165,155,.8)"; x.lineWidth = 1; x.beginPath(); for (let i = 0; i <= 30; i++) { const t = .2 + i / 30 * .5, ax = mix(bx, jx, t), ay = mix(by, jy, t); x.lineTo(ax + Math.sin(i * 2.1) * 3.5, ay + Math.cos(i * 2.1) * 3.5); } x.stroke();
-    x.fillStyle = "#3b3a38"; x.beginPath(); x.arc(jx, jy, 5, 0, 7); x.fill();
-    let sp = x.createRadialGradient(sx, sy + R * .5, R * .6, sx, sy + R * .5, R * 1.6); sp.addColorStop(0, "rgba(255,214,150,.5)"); sp.addColorStop(1, "rgba(255,214,150,0)");
-    x.globalCompositeOperation = "screen"; x.fillStyle = sp; x.fillRect(sx - R * 2, sy - R, R * 4, R * 3.2); x.globalCompositeOperation = "source-over";   // light spilling from under the lip
-    shadowed(x, sx, sy, 16, () => { x.fillStyle = "#000"; x.beginPath(); x.arc(sx, sy, R, 0, 7); x.fill(); });
+
+  // a metal rod seen from above: a round bar, lit along one side
+  const rod = (x, ax, ay, bx, by, w) => { const L = Math.hypot(bx - ax, by - ay), a = Math.atan2(by - ay, bx - ax);
+    at(x, ax, ay, a, () => { cyl(x, 0, -w / 2, L, w, [[0, "#1b1a19"], [.3, "#8c8984"], [.5, "#4a4845"], [1, "#151413"]]); }); };
+  const spring = (x, ax, ay, bx, by, off) => { const L = Math.hypot(bx - ax, by - ay), a = Math.atan2(by - ay, bx - ax);
+    at(x, ax, ay, a, () => { x.strokeStyle = "rgba(190,184,174,.85)"; x.lineWidth = 1.1; x.beginPath();
+      for (let t = L * .18; t < L * .62; t += 2.2) { x.moveTo(t, off - 3.2); x.lineTo(t + 1.6, off + 3.2); } x.stroke(); }); };
+  // the anglepoise, clamped to the desk's top edge (the clamp hangs off it), two-rod arms with springs, a domed shade
+  const lamp = (x, sx, sy, R, cx) => {
+    const ex = mix(cx, sx, .45) + R * .1, ey = R * 1.05, gap = 7;   // the elbow
+    const arm = (ax, ay, bx, by) => { const L = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / L * gap, ny = (bx - ax) / L * gap;
+      rod(x, ax + nx, ay + ny, bx + nx, by + ny, 5); rod(x, ax - nx, ay - ny, bx - nx, by - ny, 5); spring(x, ax, ay, bx, by, 0); };
+    shadowed(x, ex, ey, 22, () => { x.strokeStyle = "#000"; x.lineWidth = 16; x.lineJoin = "round"; x.beginPath(); x.moveTo(cx, 2); x.lineTo(ex, ey); x.lineTo(sx, sy); x.stroke(); });
+    shadowed(x, sx, sy, 30, () => { x.fillStyle = "#000"; x.beginPath(); x.arc(sx, sy, R, 0, 7); x.fill(); });
+    shadowed(x, cx, 6, 6, () => { x.fillStyle = "#000"; x.fillRect(cx - 24, -4, 48, 26); });
+    // the clamp: a C-clamp over the desk edge, its screw and knob hanging below the desk (off the card, above it)
+    cyl(x, cx - 24, -46, 48, 68, [[0, "#121212"], [.5, "#2e2d2c"], [.62, "#55524e"], [1, "#161616"]]);
+    x.strokeStyle = "rgba(255,240,220,.25)"; x.lineWidth = 1; x.strokeRect(cx - 23.5, -45.5, 47, 67);
+    x.fillStyle = "rgba(0,0,0,.45)"; x.fillRect(cx - 24, -1, 48, 2);   // the desk's edge seen through the clamp's jaw
+    cyl(x, cx - 4, -74, 8, 30, [[0, "#3c3a37"], [.45, "#b9b4ac"], [1, "#2c2a28"]]);
+    let g = x.createRadialGradient(cx - 4, -82, 1, cx, -78, 14); g.addColorStop(0, "#6a6560"); g.addColorStop(1, "#141312"); x.fillStyle = g; x.beginPath(); x.arc(cx, -78, 13, 0, 7); x.fill();
+    // the post, the arms, the joints
+    g = x.createRadialGradient(cx - 3, 4, 1, cx, 8, 13); g.addColorStop(0, "#77726b"); g.addColorStop(1, "#151413"); x.fillStyle = g; x.beginPath(); x.arc(cx, 8, 12, 0, 7); x.fill();
+    arm(cx, 8, ex, ey); arm(ex, ey, sx, sy);
+    for (const [jx, jy, jr] of [[cx, 8, 6], [ex, ey, 9]]) { g = x.createRadialGradient(jx - 2, jy - 2, 1, jx, jy, jr); g.addColorStop(0, "#8d8881"); g.addColorStop(1, "#1a1918"); x.fillStyle = g; x.beginPath(); x.arc(jx, jy, jr, 0, 7); x.fill(); }
+    // warm light spilling from under the shade's lip, then the shade
+    let sp = x.createRadialGradient(sx, sy + R * .5, R * .6, sx, sy + R * .5, R * 1.6); sp.addColorStop(0, "rgba(255,214,150,.42)"); sp.addColorStop(1, "rgba(255,214,150,0)");
+    x.save(); x.beginPath(); x.rect(0, 0, W, H); x.clip(); x.fillStyle = sp; x.fillRect(sx - R * 2, sy - R, R * 4, R * 3.2); x.restore();
     g = x.createRadialGradient(sx - R * .3, sy + R * .3, R * .02, sx, sy, R * 1.05); g.addColorStop(0, "#8a857e"); g.addColorStop(.3, "#46433f"); g.addColorStop(.8, "#1f1e1c"); g.addColorStop(1, "#121110");
     x.fillStyle = g; x.beginPath(); x.arc(sx, sy, R, 0, 7); x.fill();
-    x.strokeStyle = "rgba(255,236,200,.55)"; x.lineWidth = 2.2; x.beginPath(); x.arc(sx, sy, R - 1, Math.PI * .1, Math.PI * .9); x.stroke();   // the lit lip of the shade
+    x.strokeStyle = "rgba(255,236,200,.55)"; x.lineWidth = 2.2; x.beginPath(); x.arc(sx, sy, R - 1, Math.PI * .1, Math.PI * .9); x.stroke();
+    x.strokeStyle = "rgba(0,0,0,.4)"; x.lineWidth = 1; x.beginPath(); x.arc(sx, sy, R * .62, 0, 7); x.stroke();   // the seam where the dome meets its neck
     x.fillStyle = "#4a4845"; x.beginPath(); x.arc(sx, sy, R * .16, 0, 7); x.fill();
+    x.fillStyle = "#26241f"; x.beginPath(); x.arc(sx + R * .16, sy - R * .02, R * .07, 0, 7); x.fill();   // the switch
   };
 
-  let r = rng(19), lastW = 0, lastH = 0, url = null;
-  const build = () => {
-    const W = card.clientWidth, H = card.clientHeight; if (!W || !H) return;
-    if (Math.abs(W - lastW) < 2 && Math.abs(H - lastH) < 2 && url) return; lastW = W; lastH = H; r = rng(19);
+  const lay = () => {
     const cr = card.getBoundingClientRect(), rel = el => { const b = el.getBoundingClientRect(); return { x: b.left - cr.left, y: b.top - cr.top, w: b.width, h: b.height, r: b.right - cr.left, b: b.bottom - cr.top }; };
-    const M = rel(card.querySelector(".mark")), T = rel(card.querySelector(".mark + div")), one = T.y > M.b - 2;   // one column (phones)
-    const k = Math.min(2, devicePixelRatio || 1), c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k);
-    const x = c.getContext("2d"); x.scale(k, k);
-    walnut(x, W, H, k);
-    const R = Math.max(48, Math.min(92, Math.min(W, H) * .17));
-    // the shade hangs over the top edge above the mat, up and left of the paper (where the 3D ball's light comes from); its
-    // base stands off the card, up and right, so the arm crosses the wood
-    const sx = M.x + M.w * (one ? .22 : .3), sy = -R * .28; LX = sx + R * .15; LY = sy + R * 1.5;
-    // the lamp's pool of light on the desk, and the desk falling into the dark round it
-    const pool = () => { const P = Math.max(W, H) * .75; let g = x.createRadialGradient(LX, LY, 0, LX, LY, P); g.addColorStop(0, "rgba(255,190,120,.85)"); g.addColorStop(.45, "rgba(255,170,100,.25)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    const M = rel(card.querySelector(".mark")), T = rel(card.querySelector(".mark + div")), one = T.y > M.b - 2;
+    const R = Math.max(46, Math.min(84, Math.min(W, H) * .15)), sx = M.x + M.w * (one ? .2 : .26), sy = -R * .05;
+    return { M, T, one, R, sx, sy, cx: sx + R * (one ? 2.6 : 3.3), LX: sx + R * .15, LY: sy + R * 1.5 };
+  };
+
+  let r = rng(19), lastW = 0, lastH = 0, cv = null;
+  const build = () => {
+    W = card.clientWidth; H = card.clientHeight; if (!W || !H) return;
+    if (Math.abs(W - lastW) < 2 && Math.abs(H - lastH) < 2 && cv) return; lastW = W; lastH = H; r = rng(19);
+    K = Math.min(2, devicePixelRatio || 1);
+    const L = lay(); LX = L.LX; LY = L.LY;
+    // 1–3: the walnut, with the lamp's pool and the fall-off into the dark baked in (soft-light reads best on dark wood)
+    if (DESK <= 3) {
+      const c = document.createElement("canvas"); c.width = Math.round(W * K); c.height = Math.round(H * K);
+      const x = c.getContext("2d"); x.scale(K, K); walnut(x, W, H, K);
+      const P = Math.max(W, H) * .75; let g = x.createRadialGradient(LX, LY, 0, LX, LY, P); g.addColorStop(0, "rgba(255,190,120,.85)"); g.addColorStop(.45, "rgba(255,170,100,.25)"); g.addColorStop(1, "rgba(0,0,0,0)");
       x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(0, 0, W, H);
       g = x.createRadialGradient(LX, LY, 0, LX, LY, P * .45); g.addColorStop(0, "rgba(255,200,140,.16)"); g.addColorStop(1, "rgba(255,200,140,0)");
-      x.globalCompositeOperation = "screen"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.globalCompositeOperation = "source-over"; };
-    let g;
-    // mat under the paper, a little askew, bigger than the paper and running off the card's edge
-    const mw = one ? W * 1.02 : M.w * 1.16, mh = one ? M.h * 1.12 : Math.max(M.h * 1.1, H * .9);
-    mat(x, one ? W * .52 : M.x + M.w / 2 - M.w * .02, one ? M.y + M.h * .5 : M.y + M.h / 2 + H * .06, mw, mh, -.03, r);
-    if (one) {
-      knife(x, W * .78, M.b + 8, -.35, 110);
-      paperclip(x, W - 30, T.b + 18, .4); paperclip(x, W - 52, T.b + 22, -.2);
-      ruler(x, W * .5, Math.min(H - 8, T.b + 20), .02, W * .7);
-    } else {
-      const free = H - T.b, rx = T.x + Math.min(T.w, 380) / 2;
-      if (free > 46) ruler(x, rx, T.b + free * .52, .015, Math.min(T.w, 380));
-      knife(x, M.x + M.w * .2, M.b - 6, .6, 118);
-      paperclip(x, T.x + 30, T.y - 42, .3); paperclip(x, T.x + 58, T.y - 30, -.5); paperclip(x, W - 60, H - 34, 1.1);
-      binder(x, W - 54, 54, .35);
+      x.globalCompositeOperation = "screen"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.globalCompositeOperation = "source-over";
+      g = x.createRadialGradient(LX, LY, Math.min(W, H) * .3, LX, LY, Math.hypot(W, H) * 1.05); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(8,3,1,.6)");
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      card.style.backgroundImage = `url("${c.toDataURL("image/jpeg", .88)}")`; card.style.backgroundSize = `${W}px ${H}px`;
     }
-    pool();   // the light lands on everything on the desk, under the lamp itself
-    lamp(x, sx, sy, R, sx + R * 2.9, -R * .55);
-    g = x.createRadialGradient(LX, LY, Math.min(W, H) * .3, LX, LY, Math.hypot(W, H) * 1.05); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(8,3,1,.6)");
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    url = c.toDataURL("image/jpeg", .88);
-    card.style.backgroundImage = `url("${url}")`; card.style.backgroundSize = `${W}px ${H}px`;
+    // the props, on their own canvas that overhangs the card
+    const PX = L.one ? 24 : 140, PT = 110, PB = 80, c = cv || document.createElement("canvas");
+    c.className = "props"; c.setAttribute("aria-hidden", "true");
+    Object.assign(c.style, { left: -PX + "px", top: -PT + "px", width: W + 2 * PX + "px", height: H + PT + PB + "px" });
+    c.width = Math.round((W + 2 * PX) * K); c.height = Math.round((H + PT + PB) * K);
+    const x = c.getContext("2d"); x.setTransform(K, 0, 0, K, PX * K, PT * K);
+    if (DESK > 3) {   // the lighter desks: the lamp's pool as plain light (their surface comes from the SLAB script)
+      x.save(); x.beginPath(); x.rect(0, 0, W, H); x.clip();
+      let g = x.createRadialGradient(LX, LY, 0, LX, LY, Math.max(W, H) * .55); g.addColorStop(0, "rgba(255,226,180,.3)"); g.addColorStop(1, "rgba(255,226,180,0)"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      g = x.createRadialGradient(LX, LY, Math.min(W, H) * .4, LX, LY, Math.hypot(W, H)); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(20,10,4,.3)"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      x.restore();
+    }
+    const { M, T, one } = L;
+    // the mat: under the paper, askew, hanging off the desk's edge (left and bottom on desktop, both sides on phones)
+    if (one) mat(x, W * .5 + 6, M.y + M.h * .5, W + 30, M.h * 1.14, -.035, r);
+    else { const mw = M.w * 1.22, mh = Math.max(M.h * 1.15, H * .98); mat(x, M.x + M.w / 2 - M.w * .1, H - mh / 2 + 34, mw, mh, -.03, r); }
+    if (one) knife(x, W * .76, M.b + 8, -.35, 110);
+    else { knife(x, M.x + M.w * .2, M.b - 6, .6, 118); paperclip(x, T.x + 30, T.y - 42, .3); paperclip(x, T.x + 58, T.y - 30, -.5); }
+    if (one) { paperclip(x, W - 34, M.b + 30, .4); }
+    lamp(x, L.sx, L.sy, L.R, L.cx);
+    if (!cv) { cv = c; card.prepend(c); }
   };
   const go = () => requestAnimationFrame(build);
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(go);
   let t; const later = () => { clearTimeout(t); t = setTimeout(build, 200); };
-  addEventListener("resize", later); new ResizeObserver(later).observe(card);
+  addEventListener("resize", later); new ResizeObserver(later).observe(card, { box: "border-box" });   // border-box: the PENCIL module grows the card with padding
 })();
 </script>
 <script>
@@ -2192,9 +2190,10 @@
     card.style.backgroundImage = `url(${c.toDataURL("image/jpeg", .9)})`; card.style.backgroundSize = `${W}px ${H}px`;   // explicit px: the Safari nav redraw scales it
   };
   let lastW = 0, T = 0;
-  const go = () => { const w = card.clientWidth; if (Math.abs(w - lastW) < 8) return; lastW = w; draw(); };
+  // height too, and the border box: the PENCIL module grows the card with padding after this has drawn (a bare strip at the bottom)
+  let lastH = 0; const go = () => { const w = card.clientWidth, h = card.clientHeight; if (Math.abs(w - lastW) < 8 && Math.abs(h - lastH) < 2) return; lastW = w; lastH = h; draw(); };
   go();
-  if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 200); }).observe(card);
+  if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 200); }).observe(card, { box: "border-box" });
 })();
 </script>
 <script type="module">
@@ -2243,7 +2242,7 @@ if (card && mark) (async () => {
 
   const cam = new THREE.PerspectiveCamera(12, 1, 10, 3000);
   const place = () => {
-    const c = card.getBoundingClientRect(), col = card.children[1], last = col && col.lastElementChild;
+    const c = card.getBoundingClientRect(), col = card.querySelector(".mark + div"), last = col && col.lastElementChild;   // by selector: the props canvas is prepended to the card
     if (!last) return;
     const pxmm = mark.clientWidth * (4 / 5.2) / 175, phone = c.width < 700;
     const cs = getComputedStyle(card), pad = parseFloat(cs.paddingLeft);
