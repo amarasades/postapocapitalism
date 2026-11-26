@@ -1253,7 +1253,10 @@
       P.w = b.width; P.h = b.height; const mn = Math.min(P.w, P.h);
       if (P.c.width !== Math.round(P.w * P.k) || P.c.height !== Math.round(P.h * P.k)) { P.c.width = Math.round(P.w * P.k); P.c.height = Math.round(P.h * P.k); }
       g.viewport(0, 0, P.c.width, P.c.height); g.uniform2f(U.uFb, P.c.width, P.c.height); g.uniform1f(U.uSee, P.moves ? 1 : 0);
-      if (P.moves && navTxt.ready) { const ok = navTxt.covers(b); if (b.bottom > 0 && !ok && performance.now() - (navTxt.at || 0) > 250) navTxt.snap(b);
+      if (P.moves) { const sy = scrollY; if (sy !== navTxt.sy) { navTxt.dir = sy < navTxt.sy ? -1 : 1; navTxt.sy = sy; } }
+      if (P.moves && navTxt.ready) { const ok = navTxt.covers(b);
+        // re-drawn BEFORE the band runs out (in the direction you're scrolling), so a flick never outruns it
+        if (b.bottom > 0 && (!ok || navTxt.low(b)) && performance.now() - (navTxt.at || 0) > 200) navTxt.snap(b);
         g.uniform4f(U.uTxtR, 0, navTxt.top - scrollY, navTxt.w, navTxt.h); g.uniform1f(U.uTxtA, ok ? (navTxt.hasPaper ? 2 : 1) : 0); }
       else g.uniform1f(U.uTxtA, 0);
       const ob = orbEl.getBoundingClientRect(); g.uniform4f(U.uOrbR, ob.left, ob.top, ob.width, ob.height); g.uniform1f(U.uOrbA, orbReady && P.hasOrb ? orbAlpha : 0); setScene(g, U);
@@ -1263,7 +1266,9 @@
       if (P.moves) {
         const bevel = navBevel(P.w, P.h, P.r);
         g.uniform3f(U.uGeo, P.r, bevel, bevel * .82);
-      } else g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65);
+      // the reach (how far beyond the edge the bevel looks) scales with the sun: on a phone the sun is ~130px wide and a
+      // fixed ~130px reach (red ray) folded a whole sun into the rim, so it twisted into wedges and dented at the edges
+      } else g.uniform3f(U.uGeo, P.r, Math.max(14, Math.min(34, mn * .36)), Math.min(110, Math.max(40, mn * .6)) * .65 * Math.min(1, Math.max(.4, sun[2] / 300)));
       const chip = P.el === tele && mode === "future" && tele._chip; g.uniform3f(U.uChip, chip ? chip[0] : 0, chip ? chip[1] : 0, chip ? 1 : 0);
       [U.uF0, U.uF1, U.uF2].forEach(u => g.uniform4f(u, 0, 0, 0, 0));
       g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
@@ -1344,13 +1349,21 @@
     const navTxt = { ready: false, top: 0, w: 0, h: 0, cv: document.createElement("canvas"),
       // (the band is clamped at the page top, so "above" counts as covered there; otherwise this re-snapped forever)
       covers(b) { const t = b.top + scrollY; return this.ready && (t - 40 > this.top || this.top === 0) && t + b.height + 40 < this.top + this.h; },
-      busy: false, pending: false,
+      // less than LOW px of band left ahead of the nav in the scroll direction
+      low(b) { const t = b.top + scrollY, LOW = 360; return this.dir < 0 ? this.top > 0 && t - this.top < LOW : this.top + this.h - (t + b.height) < LOW; },
+      busy: false, pending: false, dir: -1, sy: 0, n: 0, ms: 0, err: "", bufs: [document.createElement("canvas"), document.createElement("canvas")], bi: 0,
       snap(b) {
         // everything under the nav, in page order: backgrounds (colours, gradients, textures), svg graphics, canvases and
         // text, drawn into a band ±260px around it. svg graphics decode asynchronously; the old texture stays up until the
         // new one is complete, so nothing blocks scrolling
-        if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true; this.at = performance.now();
-        const k = navP.k, M = 260, top = Math.max(0, b.top + scrollY - M), h = Math.round(b.height + 2 * M), w = Math.round(innerWidth);
+        if (!navP) return; if (this.busy) { this.pending = true; return; } this.busy = true; this.at = performance.now(); this.n++;
+        // the band: long ahead of the scroll direction, shorter behind. it was ±260px, which a flick crossed in ~0.1s: the
+        // texture stopped covering the nav and the rim fell back to bare sky, so the letter and stamp never showed while
+        // moving. capped so the texture (two bands when the paper is under it) fits the GPU's limit
+        const k = navP.k, cap = Math.floor(Math.min(this.maxTex || 4096, 8192) / (2 * k)) - Math.ceil(b.height) - 8;
+        const AHEAD = Math.min(1150, Math.floor(cap * .7)), BEHIND = Math.min(450, cap - AHEAD);
+        const up = this.dir < 0 ? AHEAD : BEHIND, down = this.dir < 0 ? BEHIND : AHEAD;
+        const top = Math.max(0, Math.round(b.top + scrollY - up)), h = Math.round(b.top + scrollY + b.height + down) - top, w = Math.round(innerWidth);
         const vTop = top - scrollY, vBot = vTop + h;
         const ops = [], paperOps = [], waits = [];
         const visible = r => r.bottom > vTop && r.top < vBot && r.width > 0 && r.height > 0;
@@ -1433,34 +1446,43 @@
         // Use a second band in the same texture only when the letter is present.
         const hasPaper = paperOps.length > 0;
         const bandHeight = Math.round(h * k);
-        const cv2 = document.createElement("canvas");
+        // two canvases, alternated: the one on screen stays intact, and iOS never has to hold a fresh 10+ MB canvas per redraw
+        // until garbage collection (Safari caps total canvas memory and starts returning null contexts)
+        const cv2 = this.bufs[this.bi ^= 1];
         cv2.width = Math.round(w * k);
         cv2.height = bandHeight * (hasPaper ? 2 : 1);
         // it must never get stuck: any failure (a tainted canvas on Safari, an image that never loads) used to leave busy set
         // forever, the texture went stale, and the nav rim showed bare sky ("works for a moment, then this")
         Promise.all(waits).then(async () => {
-          const x = cv2.getContext("2d");
+          const x = cv2.getContext("2d"); if (!x) throw new Error("no 2d context");
           const paintBand = async (drawOps, offset) => {
             x.save();
             x.beginPath();
             x.rect(0, offset, cv2.width, bandHeight);
             x.clip();
             x.setTransform(k, 0, 0, k, 0, offset);
-            for (const op of drawOps) { try { await op(x); } catch (e) {} }
+            for (const op of drawOps) { try { await op(x); } catch (e) { this.err = String(e && e.message || e); } }
             x.restore();
           };
           await paintBand(ops, 0);
           if (hasPaper) await paintBand(paperOps, bandHeight);
           const g = navP.g; g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, navP.txt);
           try { g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, cv2); }
-          catch (e) { g.activeTexture(g.TEXTURE0); this.busy = false; if (!this.safe) { this.safe = true; this.snap(navP.el.getBoundingClientRect()); } return; }
+          catch (e) { this.err = "upload: " + (e && e.message || e); g.activeTexture(g.TEXTURE0); this.busy = false; if (!this.safe) { this.safe = true; this.snap(navP.el.getBoundingClientRect()); } return; }
           g.activeTexture(g.TEXTURE0);
-          this.cv = cv2; this.hasPaper = hasPaper; this.top = top; this.w = w; this.h = h; this.ready = true; this.busy = false;
+          this.ms = Math.round(performance.now() - this.at); this.cv = cv2; this.hasPaper = hasPaper; this.top = top; this.w = w; this.h = h; this.ready = true; this.busy = false;
           if (this.pending) { this.pending = false; setTimeout(() => this.snap(navP.el.getBoundingClientRect()), 120); }
           drawLens(navP);
-        }).catch(() => { this.busy = false; });
+        }).catch(e => { this.err = String(e && e.message || e); this.busy = false; });
       } };
     if (navP) {
+      navTxt.maxTex = navP.g.getParameter(navP.g.MAX_TEXTURE_SIZE) || 4096;
+      // ?glassdebug: a small readout of the nav's redraw, for checking on a real phone (the cloud preview is Chromium)
+      if (/glassdebug/.test(location.search)) { const d = document.createElement("pre");
+        d.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99;margin:0;padding:6px 8px;font:10px/1.35 monospace;background:rgba(0,0,0,.72);color:#fff;border-radius:6px;pointer-events:none;max-width:calc(100% - 16px);white-space:pre-wrap";
+        document.body.append(d);
+        setInterval(() => { const b = navP.el.getBoundingClientRect();
+          d.textContent = `nav texture: ${navTxt.ready ? "ready" : "not ready"} · covers ${navTxt.covers(b)} · paper ${!!navTxt.hasPaper}\nredraws ${navTxt.n} · last ${navTxt.ms}ms · band ${navTxt.h}px · max tex ${navTxt.maxTex} · dpr ${devicePixelRatio}\nerror: ${navTxt.err || "none"}`; }, 400); }
       const re = () => { if (!document.querySelector(".nav.tucked")) { navTxt.snap(navP.el.getBoundingClientRect()); drawLens(navP); } };
       const nav = navP.el.closest(".nav");
       new MutationObserver(re).observe(nav, { attributes: true, attributeFilter: ["class"] });
@@ -1676,13 +1698,15 @@
       if (ticking) return; ticking = true;
       requestAnimationFrame(() => {
         const y = scrollY, dy = y - last;
-        if (y < 80 || dy < -4) nav.classList.remove("tucked");
-        else if (dy > 4) nav.classList.add("tucked");
+        // toggle, never add/remove: those rewrite the class attribute even when nothing changes, and that woke the nav
+        // glass's MutationObserver on EVERY scroll frame (a full page redraw for the iPhone nav lens, each frame)
+        if (y < 80 || dy < -4) nav.classList.toggle("tucked", false);
+        else if (dy > 4) nav.classList.toggle("tucked", true);
         if (Math.abs(dy) > 4) last = y;
         ticking = false;
       });
     }, { passive: true });
-    nav.addEventListener("focusin", () => nav.classList.remove("tucked"));
+    nav.addEventListener("focusin", () => nav.classList.toggle("tucked", false));
   })();
 
   /* ---------- adaptive glow on "futures.": brighter the paler the sky behind it ----------
