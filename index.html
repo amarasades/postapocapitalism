@@ -1935,7 +1935,8 @@ if (mark) {
       for (const [u, v, w] of [[a, b, c], [b, c, a], [c, a, b]]) { const k = u < v ? u * 1e5 + v : v * 1e5 + u; const e = em.get(k); if (e) e.push(w); else em.set(k, [u, v, w]); } }
     const E = [], H = [], HK = [];
     const crease = (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2;
-    for (const e of em.values()) { E.push(e[0], e[1]); if (e.length === 4) { H.push(e[2], e[3]); HK.push(crease(e[0], e[1]) ? lines[LN[e[0]]].k : 1); } }
+    const CE = [];
+    for (const e of em.values()) { E.push(e[0], e[1]); if (crease(e[0], e[1])) CE.push(e[0], e[1]); if (e.length === 4) { H.push(e[2], e[3]); HK.push(crease(e[0], e[1]) ? lines[LN[e[0]]].k : 1); } }
     const rest = (A, n) => { const L = new Float32Array(n); for (let i = 0; i < n; i++) L[i] = Math.hypot(X[A[2 * i]] - X[A[2 * i + 1]], Y[A[2 * i]] - Y[A[2 * i + 1]]); return L; };
     const NE = E.length / 2, NH = H.length / 2, LE = rest(E, NE), LH = rest(H, NH);
     const P = new Float32Array(N * 3); for (let i = 0; i < N; i++) { P[3 * i] = X[i]; P[3 * i + 1] = Y[i]; }
@@ -1975,14 +1976,14 @@ if (mark) {
     // the open sheet: the half-crumpled sheet pulled back flat, stopped short, so the creases it was folded along remain
     const O = Float32Array.from(snaps[Math.floor(STAGES * .45)]);
     P.set(O);
-    for (let it = 0; it < 26; it++) { const pull = .1;
+    for (let it = 0; it < 18; it++) { const pull = .1;
       for (let i = 0; i < N; i++) { P[3 * i] += (X[i] - P[3 * i]) * pull; P[3 * i + 1] += (Y[i] - P[3 * i + 1]) * pull; P[3 * i + 2] *= 1 - pull * 1.2; }
       solve(); }
     let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N;
     for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; P[3 * i + 2] -= zm; }
     snaps.unshift(Float32Array.from(P));
     const flat = new Float32Array(N * 2); for (let i = 0; i < N; i++) { flat[2 * i] = X[i]; flat[2 * i + 1] = Y[i]; }
-    return { flat, tris, snaps };
+    return { flat, tris, snaps, creases: new Uint32Array(CE) };
   }
 
   // ---- the paper texture: grain, crease lines, the pecked PAC, a barely-ragged edge (alpha). 1024 × 794
@@ -2041,7 +2042,7 @@ if (mark) {
   const folded = new Promise(res => {
     try {
       const w = new Worker(URL.createObjectURL(new Blob([`const foldSheet = ${foldSheet};
-        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES); postMessage(o, [o.flat.buffer, o.tris.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
+        onmessage = e => { const o = foldSheet(e.data.lines, e.data.SW, e.data.SH, e.data.STAGES); postMessage(o, [o.flat.buffer, o.tris.buffer, o.creases.buffer, ...o.snaps.map(a => a.buffer)]); };`], { type: "text/javascript" })));
       w.onmessage = e => { res(e.data); w.terminate(); };
       w.onerror = () => { w.terminate(); res(foldSheet(lines, SW, SH, STAGES)); };
       w.postMessage({ lines, SW, SH, STAGES });
@@ -2065,13 +2066,38 @@ if (mark) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial({ opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
-    const { flat, tris, snaps } = await folded, N = flat.length / 2;
-    const geo = new THREE.BufferGeometry(), uv = new Float32Array(N * 2);
-    for (let i = 0; i < N; i++) { uv[2 * i] = flat[2 * i] / SW + .5; uv[2 * i + 1] = flat[2 * i + 1] / SH + .5; }
-    const pos = new THREE.BufferAttribute(new Float32Array(N * 3), 3); pos.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute("position", pos); geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); geo.setIndex(new THREE.BufferAttribute(tris, 1));
+    const { flat, tris, snaps, creases } = await folded, N = flat.length / 2, T = tris.length / 3;
+    // shading: each corner of each triangle gets its own normal, averaged over the triangles round that vertex that are
+    // reachable WITHOUT crossing a crease line (its "wedge"). so a facet shades as one smooth sheet and only the crease
+    // lines are hard edges. (flat shading lit every little triangle on its own: "vertices with normals that don't know
+    // what to do")
+    const ck = (u, v) => u < v ? u * 1e5 + v : v * 1e5 + u, isCrease = new Set();
+    for (let i = 0; i < creases.length; i += 2) isCrease.add(ck(creases[i], creases[i + 1]));
+    const inc = Array.from({ length: N }, () => []);
+    for (let t = 0; t < T; t++) for (let c = 0; c < 3; c++) inc[tris[3 * t + c]].push(t);
+    const wStart = new Int32Array(3 * T + 1), wList = [];
+    { const corner = new Map();
+      for (let v = 0; v < N; v++) {
+        const ts = inc[v], par = ts.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+        for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
+          const A = ts[i], B = ts[j]; let w = -1;
+          for (let a = 0; a < 3; a++) { const x = tris[3 * A + a]; if (x === v) continue; for (let b = 0; b < 3; b++) if (tris[3 * B + b] === x) w = x; }
+          if (w >= 0 && !isCrease.has(ck(v, w))) par[find(i)] = find(j);
+        }
+        const groups = new Map(); ts.forEach((t, i) => { const g = find(i); (groups.get(g) || groups.set(g, []).get(g)).push(t); });
+        for (const g of groups.values()) for (const t of g) corner.set(3 * t + tris.slice(3 * t, 3 * t + 3).indexOf(v), g);
+      }
+      for (let c = 0; c < 3 * T; c++) { wStart[c] = wList.length; wList.push(...corner.get(c)); }
+      wStart[3 * T] = wList.length; }
+    const wl = Int32Array.from(wList);
+    const geo = new THREE.BufferGeometry(), uv = new Float32Array(T * 6);
+    for (let c = 0; c < 3 * T; c++) { const v = tris[c]; uv[2 * c] = flat[2 * v] / SW + .5; uv[2 * c + 1] = flat[2 * v + 1] / SH + .5; }
+    const pos = new THREE.BufferAttribute(new Float32Array(T * 9), 3), nor = new THREE.BufferAttribute(new Float32Array(T * 9), 3);
+    pos.setUsage(THREE.DynamicDrawUsage); nor.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute("position", pos); geo.setAttribute("normal", nor); geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    const V = new Float32Array(N * 3), TN = new Float32Array(T * 3), TU = new Float32Array(T * 3);
     const map = new THREE.CanvasTexture(tex2d); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
-    const mat = new THREE.MeshStandardMaterial({ map, roughness: .93, metalness: 0, flatShading: true, side: THREE.DoubleSide, alphaTest: .5 });
+    const mat = new THREE.MeshStandardMaterial({ map, roughness: .93, metalness: 0, side: THREE.DoubleSide, alphaTest: .5 });
     // the back of the sheet is plain paper, no ink showing through
     mat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(.80, .72, .60);"); };
     const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; scene.add(mesh);
@@ -2080,9 +2106,23 @@ if (mark) {
     const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     const pose = o => {
       // o = 1 open, 0 ball: walk the recorded squeeze. eased, so it bursts out of the ball and settles flat
-      const f = (1 - ease(o)) * (STAGES - 1), k = Math.min(STAGES - 2, Math.floor(f)), u = f - k, A = snaps[k], Bs = snaps[k + 1], a = pos.array;
-      for (let i = 0; i < a.length; i++) a[i] = A[i] + (Bs[i] - A[i]) * u;
-      pos.needsUpdate = true; geo.computeBoundingSphere();
+      const f = (1 - ease(o)) * (STAGES - 1), k = Math.min(STAGES - 2, Math.floor(f)), u = f - k, A = snaps[k], Bs = snaps[k + 1], a = pos.array, n = nor.array;
+      for (let i = 0; i < V.length; i++) V[i] = A[i] + (Bs[i] - A[i]) * u;
+      for (let t = 0; t < T; t++) {   // area-weighted face normals
+        const p = tris[3 * t] * 3, q = tris[3 * t + 1] * 3, r = tris[3 * t + 2] * 3;
+        const ux = V[q] - V[p], uy = V[q + 1] - V[p + 1], uz = V[q + 2] - V[p + 2], vx = V[r] - V[p], vy = V[r + 1] - V[p + 1], vz = V[r + 2] - V[p + 2];
+        TN[3 * t] = uy * vz - uz * vy; TN[3 * t + 1] = uz * vx - ux * vz; TN[3 * t + 2] = ux * vy - uy * vx;
+        for (let c = 0; c < 3; c++) { const v = tris[3 * t + c] * 3, j = (3 * t + c) * 3; a[j] = V[v]; a[j + 1] = V[v + 1]; a[j + 2] = V[v + 2]; }
+      }
+      for (let t = 0; t < T; t++) { const l = Math.hypot(TN[3 * t], TN[3 * t + 1], TN[3 * t + 2]) || 1; TU[3 * t] = TN[3 * t] / l; TU[3 * t + 1] = TN[3 * t + 1] / l; TU[3 * t + 2] = TN[3 * t + 2] / l; }
+      // inside a wedge, a neighbour counts less the more it's turned away: a fold of more than ~40° stays a hard edge even
+      // off the crease lines (the ball is full of them), while the open sheet's gentle dents melt smooth
+      for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
+        for (let w = wStart[c]; w < wStart[c + 1]; w++) { const t = wl[w] * 3; if (t === s0) continue;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .77 ? (d - .77) / .23 : 0;
+          x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
+        const l = Math.hypot(x, y, z) || 1; n[3 * c] = x / l; n[3 * c + 1] = y / l; n[3 * c + 2] = z / l; }
+      pos.needsUpdate = true; nor.needsUpdate = true; geo.computeBoundingSphere();
       const e = 1 - ease(o); mesh.rotation.set(-.3 * e, .7 * e, .2 * e); mesh.position.set(0, -.2 * e, .25 * e);
     };
 
