@@ -2080,9 +2080,9 @@ if (mark) {
     // which crease (if any) an edge lies on
     const creaseOf = V2 ? (u, v) => { for (const [l, t] of MEM[u]) for (const [m, q] of MEM[v]) if (l === m && Math.abs(t - q) < .13) return l; return -1; }
       : (u, v) => LN[u] >= 0 && LN[u] === LN[v] && Math.abs(IX[u] - IX[v]) <= 2 ? LN[u] : -1;
-    const CE = [], HC = [], HL = [], HY = [];
+    const CE = [], HC = [], HL = [], HY = [], HX = [];
     for (const e of em.values()) { E.push(e[0], e[1]); const l = creaseOf(e[0], e[1]); if (l >= 0) CE.push(e[0], e[1]);
-      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); HL.push(l); HY.push((Y[e[0]] + Y[e[1]]) / 2); } }
+      if (e.length === 4) { H.push(e[2], e[3]); HK.push(l >= 0 ? lines[l].k : 1); HC.push(l >= 0 ? 1 : 0); HL.push(l); HY.push((Y[e[0]] + Y[e[1]]) / 2); HX.push((X[e[0]] + X[e[1]]) / 2); } }
     // v2: plates = the facets between creases (triangles joined across non-crease edges). each is held flat and rigid
     // by shape matching (fit the best rotation of its flat shape to where its points are, pull them onto it). distance
     // hinges alone let the facets bend everywhere: the low-poly look
@@ -2150,7 +2150,7 @@ if (mark) {
       P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
     const edges = () => { for (let e = 0; e < NE; e++) { const a = E[2 * e] * 3, b = E[2 * e + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dz = P[b + 2] - P[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - LE[e]) / d * .5;
       P[a] += dx * c; P[a + 1] += dy * c; P[a + 2] += dz * c; P[b] -= dx * c; P[b + 1] -= dy * c; P[b + 2] -= dz * c; } };
-    let openSheet = null;
+    let openSheet = null, finSheet = null; const REL = Float32Array.from(P);   // the relaxed, nearly flat sheet
     if (V2) {
       // v2: no blending positions toward flat (that stretched the facets: v1's low-poly left side). each crease keeps a
       // share of its fold, everything else is flat, and the sheet is solved to that, so facets are true flat plates
@@ -2166,6 +2166,25 @@ if (mark) {
         // weak pull toward the table plane lays the sheet down without flattening its creases
         P.set(start || (V2.from ? snaps[Math.floor(STAGES * V2.from)] : O)); for (let it = 0; it < 160; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 2; i < P.length; i += 3) P[i] *= .985; if (it % 3 === 2) repel(); } };
       openSheet();
+      // the reworked ending's open sheet (owner, Nov 26, on 6–9: not enough crumple on top, "you eat the P", big folds
+      // must not cover the letters). per hinge: in a band [y from, y to, stage, cap] it keeps the folds that stage of the
+      // unfold has (stage ≥ 0: uncapped, and the band isn't pulled down onto the table) or is capped flatter (stage −1);
+      // in a protect box [x0, x1, y0, y1, cap] it's held nearly flat, so no fold or flap can form over the letters
+      finSheet = F => { const hM = hd(O), tg = new Float32Array(NH), dz = new Float32Array(N).fill(.985);
+        const fade = (v, a, b, f) => Math.min(1, Math.max(0, Math.min(v - a, b - v) / f));
+        const hB = F.bands.map(([, , k]) => k >= 0 ? hd(snaps[k]) : null);
+        for (let e = 0; e < NH; e++) { let hm = hM[e], op = V2.open * (HC[e] ? lines[HL[e]].open || 1 : 1), cap = .906;
+          F.bands.forEach(([y0, y1, k, c2], i) => { const w = fade(HY[e], y0, y1, .2); if (!w) return;
+            if (k >= 0) { hm += (hB[i][e] - hm) * w; op += (1 - op) * w; cap *= 1 - w; } else cap += (c2 - cap) * w; });
+          for (const [x0, x1, y0, y1, c2] of F.protect) { const w = Math.min(fade(HX[e], x0, x1, .15), fade(HY[e], y0, y1, .15)); cap += (Math.max(cap, c2) - cap) * w; }
+          tg[e] = HC[e] ? LH[e] - (LH[e] - Math.min(LH[e], hm)) * Math.min(1, op) * (1 - HK[e] * .6) : LH[e];
+          tg[e] = Math.max(tg[e], LH[e] * cap); }
+        for (let v = 0; v < N; v++) for (const [y0, y1, k] of F.bands) if (k >= 0) dz[v] += (1 - dz[v]) * fade(Y[v], y0, y1, .2);
+        // from part way between the relaxed, nearly flat sheet and the folded stage: every fold starts in the direction it
+        // folded but nothing starts tucked under (from the folded stage it kept its tucks: the fold beside the P; from
+        // the flat sheet the folds barely grew back)
+        { const S = snaps[Math.floor(STAGES * V2.from)] || O; for (let i = 0; i < P.length; i++) P[i] = REL[i] + (S[i] - REL[i]) * F.seed; }
+        for (let it = 0; it < 300; it++) { edges(); hinge(tg, 1); plates(1); for (let i = 0; i < N; i++) P[3 * i + 2] *= dz[i]; if (it % 3 === 2) repel(); } };
     } else
     for (let i = 0; i < N; i++) { P[3 * i] = X[i] + (P[3 * i] - X[i]) * .3; P[3 * i + 1] = Y[i] + (P[3 * i + 1] - Y[i]) * .3; }
     let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
@@ -2208,14 +2227,14 @@ if (mark) {
     if (V2 && V2.fin) { const F = V2.fin;
       spreadRef = snaps.map(A => { let mx = 0, my = 0, mz = 0; for (let i = 0; i < N; i++) { mx += A[3 * i]; my += A[3 * i + 1]; mz += A[3 * i + 2]; } mx /= N; my /= N; mz /= N;
         let s2 = 0; for (let i = 0; i < N; i++) s2 += (A[3 * i] - mx) ** 2 + (A[3 * i + 1] - my) ** 2 + (A[3 * i + 2] - mz) ** 2; return Math.sqrt(s2 / N); });
-      openSheet(); let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
+      F.protect ? finSheet(F) : openSheet(); let zm = 0; for (let i = 0; i < N; i++) zm += P[3 * i + 2]; zm /= N; for (let i = 0; i < N; i++) P[3 * i + 2] -= zm;
       const NEW = Float32Array.from(P); vw = new Float32Array(N);
       // bands of the sheet that stay more crumpled: their points copied from a later (less open) stage of the same
       // unfold, faded at the band's edge. [y from, y to, stage, amount]; stage -1 = laid flatter instead
-      for (const [y0, y1, k, a] of F.bands) { const S = snaps[Math.max(0, k)];
+      if (!F.protect) for (const [y0, y1, k, a] of F.bands) { const S = snaps[Math.max(0, k)];
         for (let v = 0; v < N; v++) { const w = a * Math.min(1, Math.max(0, Math.min(Y[v] - y0, y1 - Y[v]) / .25)); if (w <= 0) continue;
           if (k < 0) NEW[3 * v + 2] *= 1 - w; else for (let d = 0; d < 3; d++) NEW[3 * v + d] += (S[3 * v + d] - NEW[3 * v + d]) * w; } }
-      if (F.ref) { const R = foldSheet(F.ref, SW, SH, STAGES, null), RO = R.snaps[0], rf = R.flat, rt = R.tris, RT = rt.length / 3;
+      if (F.ref && F.zone) { const R = foldSheet(F.ref, SW, SH, STAGES, null), RO = R.snaps[0], rf = R.flat, rt = R.tris, RT = rt.length / 3;
         const [x0, y0, y1, fz] = F.zone, GZ = .2, grid = new Map();   // v1's flat triangles, bucketed
         for (let t = 0; t < RT; t++) { const xs = [0, 1, 2].map(c => rf[2 * rt[3 * t + c]]), ys = [0, 1, 2].map(c => rf[2 * rt[3 * t + c] + 1]);
           for (let i = Math.floor(Math.min(...xs) / GZ); i <= Math.floor(Math.max(...xs) / GZ); i++) for (let j = Math.floor(Math.min(...ys) / GZ); j <= Math.floor(Math.max(...ys) / GZ); j++) { const k = i * 997 + j; (grid.get(k) || grid.set(k, []).get(k)).push(t); } }
@@ -2236,7 +2255,7 @@ if (mark) {
   }
 
   // ---- the paper texture: grain, crease lines, the pecked PAC, a barely-ragged edge (alpha). 1024 × 794
-  function paperTexture(lines, skip) {
+  function paperTexture(lines, skip, bigP) {
     const TW = 1024, TH = Math.round(TW * SH / SW), c = document.createElement("canvas"); c.width = TW; c.height = TH;
     const x = c.getContext("2d"), r = rng(11);
     // the edge: no tears (owner), just a fibre-rough cut a few pixels deep
@@ -2271,12 +2290,15 @@ if (mark) {
     const D = Math.PI / 180, wn = [noise1(r, 13), noise1(r, 17)];
     const wobble = pl => pl.map(([px, py]) => [px + wn[0]((px + py * .7) / 260) * 12, py + wn[1]((px * .8 - py) / 260 + .5) * 12]);
     const resample = (pl, step) => { const o = [pl[0]]; let acc = 0; for (let i = 1; i < pl.length; i++) { const [ax, ay] = pl[i - 1], [bx, by] = pl[i], L = Math.hypot(bx - ax, by - ay); let t = step - acc; while (t <= L) { o.push([ax + (bx - ax) * t / L, ay + (by - ay) * t / L]); t += step; } acc = L - (t - step); } return o; };
-    const peck = (pl, step, size) => { for (const [px, py] of resample(pl, step)) for (let j = 0; j < 3; j++) {
-      x.globalAlpha = .55 + r() * .4; const rr = size * (.45 + r() * .7);
-      x.beginPath(); x.ellipse(px + (r() - .5) * size * 1.6, py + (r() - .5) * size * 1.6, rr, rr * (.6 + r() * .4), r() * 3, 0, 7); x.fill(); } };
+    const peck = (pl, step, size, dry, rn = r) => { for (const [px, py] of resample(pl, step)) for (let j = 0; j < 3; j++) {
+      x.globalAlpha = .55 + rn() * .4; const rr = size * (.45 + rn() * .7);
+      x.beginPath(); x.ellipse(px + (rn() - .5) * size * 1.6, py + (rn() - .5) * size * 1.6, rr, rr * (.6 + rn() * .4), rn() * 3, 0, 7); if (!dry) x.fill(); } };
     x.fillStyle = "#3a2318";
     for (const pl of [[[112, 312], [110, 220], [113, 128]], [[113, 128], [160, 126], [184, 146], [182, 180], [156, 200], [111, 204]],
-      [[208, 312], [237, 220], [263, 126], [290, 222], [321, 312]], [[232, 248], [296, 244]], arc(420, 220, 70, 92, 38 * D, 322 * D, 18)]) peck(wobble(pl), 5.5, 6.2);
+      [[208, 312], [237, 220], [263, 126], [290, 222], [321, 312]], [[232, 248], [296, 244]], arc(420, 220, 70, 92, 38 * D, 322 * D, 18)]) peck(wobble(pl), 5.5, 6.2, bigP && pl[1][0] === 160);
+    // owner, Nov 26: "make the circle of the P bigger" (6–9). the old bowl is pecked "dry" above, so the random
+    // sequence, and so every other peck, stays exactly as it was
+    if (bigP) peck(wobble([[113, 128], [176, 122], [210, 148], [209, 196], [174, 224], [111, 228]]), 5.5, 6.2, false, rng(29));
     const ring = []; for (let i = 0; i <= 200; i++) { const t = i / 200, a = Math.PI * .7 + t * Math.PI * 1.82; ring.push([266 + Math.cos(a) * 238, 218 + Math.sin(a) * 190 + Math.sin(t * 31) * 2]); }
     peck(ring, 6.5, 4.2);
     const sp = []; for (let i = 0; i <= 120; i++) { const t = i / 120, a = t * Math.PI * 2 * 2.6; sp.push([462 + Math.cos(a) * (3 + t * 34), 60 + Math.sin(a) * (3 + t * 30)]); }
@@ -2288,22 +2310,26 @@ if (mark) {
   // ?pac=1/2/3 picks a crease model to compare (see designFolds); no parameter = v1, the approved one. v2 knobs: fill =
   // spacing of the mesh between creases, open = how much of its fold each crease keeps on the open sheet, soft = how far
   // a crease's shading rounds over (paper isn't razor sharp), and how smooth a facet's own slight bends shade
-  const SEED = +new URLSearchParams(location.search).get("seed");   // &seed=N tries another layout of the same model
+  const SEED = +new URLSearchParams(location.search).get("seed");
+  // the reworked ending for 6–9 (see foldSheet's finSheet): top band keeps the folds of stage 6 (the 4th step), the
+  // letters are protected (P hardest: "you eat the P"), shading smooths out over the last steps
+  const FIN = o => Object.assign({ keep: 6, full: 4.2, smooth: true, seed: .6, bands: [[.64, 2, 8, 0]],
+    protect: [[-1.6, 1.6, -1.25, .55, .975], [-1.1, 1.45, -.75, .6, .99], [-1.2, -.3, -.8, .7, .997]] }, o);   // &seed=N tries another layout of the same model
   const MODELS = [null,
     { design: () => designFolds(SEED || 5), fill: .13, open: .55, soft: .3, rigid: .15 },
     { design: () => designNetwork(SEED || 41), fill: .13, open: .55, soft: .3, rigid: .15 },
     { design: () => designLetter(SEED || 9), fill: .13, open: .55, soft: .3, rigid: .15 },
     { design: MIX[4], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 },
     { design: MIX[5], fill: .13, open: 1, soft: .3, rigid: .15, from: .32 },
-    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32 },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({}) },
     // 7–9: 6 exactly up to its 4th step, then a new open sheet: zone = [x from, y from, y to, fade] copied from v1;
     // bands = [y from, y to, stage copied, amount] (see foldSheet)
-    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.45, -.75, .85, .3], bands: [[.5, 2, 4, 1]], full: 4.2 } },
-    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.45, -.75, .85, .3], bands: [[.55, 2, 3, 1], [-2, -.85, -1, .6]], full: 4.2 } },
-    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, fin: { keep: 6, zone: [.3, -1, .85, .35], bands: [[.35, 2, 5, 1], [-2, -.8, 3, 1]], full: 4.2 } }];
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.45, -.75, .7, .3] }) },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.45, -.75, .6, .3], bands: [[.56, 2, 11, 0]] }) },
+    { design: MIX[6], fill: .13, open: .85, soft: .3, rigid: .15, from: .32, bigP: true, fin: FIN({ zone: [.3, -1, .68, .35], bands: [[.64, 2, 8, 0], [-2, -.85, -1, .99]] }) }];
   const M = MODELS[+new URLSearchParams(location.search).get("pac") || 0] || null;
   const V2 = M && { fill: M.fill, open: M.open, rigid: M.rigid, from: M.from || 0, fin: M.fin ? Object.assign({ ref: creaseDesign(19) }, M.fin) : null };
-  const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines);   // (skip, to leave lines out of the texture, is unused: the ball shows them too)
+  const lines = M ? M.design() : creaseDesign(19), tex2d = paperTexture(lines, null, M && M.bigP);   // (skip, to leave lines out of the texture, is unused: the ball shows them too)
   const cv = document.createElement("canvas"); cv.className = "pac3d"; cv.setAttribute("aria-hidden", "true"); mark.prepend(cv);
   const flatFallback = () => { cv.replaceWith(tex2d); tex2d.className = "pac3d flat"; mark.classList.add("ready"); };
   // the fold runs in a worker (a second or two of maths; on the main thread it stalled scrolling on phones)
@@ -2393,15 +2419,15 @@ if (mark) {
       // inside a wedge, a neighbour counts less the more it's turned away: a fold of more than ~25° stays a hard edge even
       // off the crease lines (the ball is full of them), while the open sheet's gentle dents melt smooth
       // (only in the last stages, the ones that ease onto the new open sheet: the ball and the early steps shade as before)
-      const qs = vw && f < M.fin.keep ? (t => t * t * (3 - 2 * t))(1 - f / M.fin.keep) : 0;
+      const late = M && M.fin && f < M.fin.keep ? (t => t * t * (3 - 2 * t))(1 - f / M.fin.keep) : 0, qs = vw ? late : 0, L = M && M.fin && M.fin.smooth ? late : 0;
       // in the zone copied from v1, v1's own shading rule (blended by how much of v1 a point carries)
       for (let c = 0; c < 3 * T; c++) { const s0 = (c / 3 | 0) * 3, q = vw ? vw[tris[c]] * qs : 0; let x = TU[s0], y = TU[s0 + 1], z = TU[s0 + 2];
         for (let w = wStart[c]; w < wStart[c + 1]; w++) { const t = wl[w] * 3; if (t === s0) continue;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], w1 = d > .9 ? (d - .9) / .1 : 0, wt = M ? (d > .6 ? Math.min(1, (d - .6) / .2) : 0) * (1 - q) + w1 * q : w1;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], w1 = d > .9 ? (d - .9) / .1 : 0, wt = M ? ((d > .6 ? Math.min(1, (d - .6) / .2) : 0) * (1 - L) + (d > .45 ? Math.min(1, (d - .45) / .3) : 0) * L) * (1 - q) + w1 * q : w1;
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         // v2: across a crease the neighbours still count a little while the fold is gentle: a soft, paper-like crease
         if (M) for (let w = xStart[c]; w < xStart[c + 1]; w++) { const t = xl[w] * 3;
-          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = d > .75 ? M.soft * (d - .75) / .25 * (1 - q) : 0;
+          const d = TU[t] * TU[s0] + TU[t + 1] * TU[s0 + 1] + TU[t + 2] * TU[s0 + 2], wt = ((d > .75 ? M.soft * (d - .75) / .25 : 0) * (1 - L) + (d > .6 ? .6 * Math.min(1, (d - .6) / .3) : 0) * L) * (1 - q);
           x += TU[t] * wt; y += TU[t + 1] * wt; z += TU[t + 2] * wt; }
         const l = Math.hypot(x, y, z) || 1; n[3 * c] = x / l; n[3 * c + 1] = y / l; n[3 * c + 2] = z / l; }
       pos.needsUpdate = true; nor.needsUpdate = true; geo.computeBoundingSphere();
