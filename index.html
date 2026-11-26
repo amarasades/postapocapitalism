@@ -267,6 +267,11 @@
   .paper.slab-2 { background-color: #b0ada2; box-shadow: 0 44px 60px -26px rgba(40,15,5,.75); }
   .paper.slab-3 { background-color: #a9acae; box-shadow: 0 44px 60px -26px rgba(30,15,10,.75); }
 
+  .paper.desk, .paper.slab { position: relative; }
+  .paper canvas.pencil { position: absolute; pointer-events: none; }
+  /* phones: room under the text for the pencil, reserved up front so the desk texture is drawn at the final height */
+  @media (max-width: 900px) { .paper.desk, .paper.slab { padding-bottom: 104px; } }
+
   /* ---------- log ---------- */
   .log { --r: 18px; }
   .log .row { display: grid; grid-template-columns: 60px 140px 1fr auto; gap: 16px; align-items: baseline; padding: 15px 18px; border-bottom: 1px dotted var(--ink-line); }
@@ -2108,6 +2113,75 @@
   const go = () => { const w = card.clientWidth; if (Math.abs(w - lastW) < 8) return; lastW = w; draw(); };
   go();
   if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 200); }).observe(card);
+})();
+</script>
+<script type="module">
+/* ---------- PENCIL: something that screams desk (owner, Nov 26) ----------
+   on every ?desk= variant: a real 3D pencil (three.js) lying on the desk under the text, lit like the 3D sheet (same
+   lights, same direction), casting its shadow on the desk. its own small canvas, so the paper's scene is untouched.
+   scale: the sheet is taken as 175 mm wide (a small letter; at A4 scale the pencil read as a toothpick), so the pencil (175 mm, 7 mm across the flats) is the size it would be next
+   to it. renders once (and on resize); preserveDrawingBuffer so the iPhone nav glass can copy it */
+const card = document.querySelector(".paper.desk, .paper.slab"), mark = card && card.querySelector(".mark");
+if (card && mark) (async () => {
+  let THREE; try { THREE = await import("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js"); } catch (e) { return; }
+  const cv = document.createElement("canvas"); cv.className = "pencil"; cv.setAttribute("aria-hidden", "true"); card.append(cv);
+  let R; try { R = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, preserveDrawingBuffer: true }); } catch (e) { cv.remove(); return; }
+  R.setClearColor(0, 0); R.outputColorSpace = THREE.SRGBColorSpace; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xfff6ec, 0xa07a5a, 1.25));   // a little more bounce than the paper's: the pencil's lower flats went near black
+  const sun = new THREE.DirectionalLight(0xfff2e2, 2.3); sun.position.set(-32, 40, 60); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.bias = -.0005; sun.shadow.normalBias = .02;
+  Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 200 }); scene.add(sun, sun.target);
+  const k = +new URLSearchParams(location.search).get("desk");
+  const sh = ({ 1: [.5, 0x0a0402], 2: [.5, 0x0a0402], 3: [.45, 0x0a0402], 4: [.36, 0x2a1406], 5: [.34, 0x1e1a14], 6: [.38, 0x14181b] })[k] || [.36, 0x1e1a14];
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: sh[0], color: sh[1] }));
+  floor.receiveShadow = true; scene.add(floor);
+
+  // the pencil, in mm, along +x (point at +x), lying on a flat of its hexagon. Rf = radius to the corners
+  const Rf = 4.04, Ri = Rf * Math.cos(Math.PI / 6), P = new THREE.Group();
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xf0b31a, roughness: .38, clearcoat: .7, clearcoatRoughness: .25, flatShading: true });
+  const wood = new THREE.MeshStandardMaterial({ color: 0xd9a46a, roughness: .85 });
+  const lead = new THREE.MeshStandardMaterial({ color: 0x2c2c2e, roughness: .35, metalness: .45 });
+  const brass = new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: .3, metalness: .55 });
+  const rub = new THREE.MeshStandardMaterial({ color: 0xe58a8a, roughness: .9 });
+  const along = (geo, x0, x1) => { geo.rotateZ(-Math.PI / 2); geo.translate((x0 + x1) / 2, 0, 0); return geo; };   // cylinder axis y → x
+  const L = 175, body = [-L / 2 + 19, L / 2 - 21];                                                     // ferrule + eraser at -x, cone at +x
+  const hex = along(new THREE.CylinderGeometry(Rf, Rf, body[1] - body[0], 6, 1), body[0], body[1]);
+  hex.rotateX(Math.PI / 6);
+  P.add(new THREE.Mesh(hex, paint));
+  // the sharpened end: the knife cut leaves the paint in scallops; a 6-sided cone keeps those arcs readable
+  const cone = along(new THREE.CylinderGeometry(1.05, Rf * .98, 17, 48, 1, true), body[1], body[1] + 17); P.add(new THREE.Mesh(cone, wood));
+  const tip = along(new THREE.CylinderGeometry(0.02, 1.05, 4, 32), body[1] + 17, body[1] + 21); P.add(new THREE.Mesh(tip, lead));
+  const fer = along(new THREE.CylinderGeometry(Rf * .93, Rf * .93, 11, 40), body[0] - 11, body[0]); P.add(new THREE.Mesh(fer, brass));
+  for (const x of [body[0] - 2.5, body[0] - 8.5]) { const t = new THREE.TorusGeometry(Rf * .93, .35, 8, 40); t.rotateY(Math.PI / 2); t.translate(x, 0, 0); P.add(new THREE.Mesh(t, brass)); }
+  const er = along(new THREE.CylinderGeometry(Rf * .86, Rf * .86, 7, 40), body[0] - 18, body[0] - 11); P.add(new THREE.Mesh(er, rub));
+  const cap = new THREE.SphereGeometry(Rf * .86, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, .35, 1); cap.rotateZ(Math.PI / 2); cap.translate(body[0] - 18, 0, 0); P.add(new THREE.Mesh(cap, rub));
+  P.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  P.position.z = Ri; scene.add(P);
+
+  const cam = new THREE.PerspectiveCamera(12, 1, 10, 3000);
+  const place = () => {
+    const c = card.getBoundingClientRect(), col = card.children[1], last = col && col.lastElementChild;
+    if (!last) return;
+    const pxmm = mark.clientWidth * (4 / 5.2) / 175, phone = c.width < 700;
+    const cs = getComputedStyle(card), pad = parseFloat(cs.paddingLeft);
+    const left = phone ? pad : col.getBoundingClientRect().left - c.left, right = c.width - pad * (phone ? 1 : .6);
+    const W = right - left, H = Math.round(Math.max(64, 40 * pxmm));
+    let top = last.getBoundingClientRect().bottom - c.top + (phone ? 16 : 22);
+    // room under the text: add padding if the card hasn't got enough
+    const need = top + H - (c.height - (phone ? 10 : 18));
+    if (need > 0) card.style.paddingBottom = (parseFloat(cs.paddingBottom) + need) + "px";
+    Object.assign(cv.style, { left: left + "px", top: top + "px", width: W + "px", height: H + "px" });
+    R.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); R.setSize(W, H, false);
+    // camera straight above, frustum = the canvas in mm
+    const hmm = H / pxmm, wmm = W / pxmm; cam.aspect = W / H; cam.position.set(0, 0, hmm / 2 / Math.tan(6 * Math.PI / 180)); cam.updateProjectionMatrix();
+    // the pencil lies across the space, a little turned, towards the right
+    P.rotation.z = phone ? .12 : .1; P.position.x = wmm / 2 - L / 2 - 8; P.position.y = -1;
+    R.render(scene, cam);
+  };
+  let lw = 0, T = 0; const go = () => { if (Math.abs(card.clientWidth - lw) < 4) return; lw = card.clientWidth; card.style.paddingBottom = ""; place(); };
+  document.fonts?.ready.then(() => { lw = 0; go(); }); go();
+  if ("ResizeObserver" in window) new ResizeObserver(() => { clearTimeout(T); T = setTimeout(go, 150); }).observe(card);
 })();
 </script>
 <script type="module">
