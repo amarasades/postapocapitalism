@@ -1,5 +1,7 @@
 # CLAUDE.md: postapocapitalism.org
 
+> **Archive branch `pac-paper-variants`: NEVER delete it** (owner, Nov 26 2026: "keep all these variants in a separate branch with a rule not to get deleted, in main and in the branch itself"). It holds every PAC paper stamp variant (`?pac=1` … `?pac=9`, v1 with no parameter) for future development. Don't delete, force-push over or rewrite this branch; don't merge it into main without the owner asking.
+
 Read this first, then `LORE.md`, then **look at `archive/first-orange/`** (the original version the owner loved: screenshots and the untouched page). Together they're everything the previous sessions knew. Nothing else carries over between accounts.
 
 ---
