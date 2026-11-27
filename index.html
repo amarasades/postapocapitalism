@@ -579,6 +579,8 @@
 </footer>
 
 <script>
+// LIVE desk (owner, Nov 27: "push this one on main"): 4 = light oak + green mat + lamp + props. ?desk=1–6 still compares, ?desk=0 = the old paper card
+window.DESK_N = (q => q.has("desk") ? +q.get("desk") : 4)(new URLSearchParams(location.search));
 (() => {
   const $ = id => document.getElementById(id);
   const NOW_YEAR = new Date().getFullYear();
@@ -1888,7 +1890,7 @@
 // 1 green, 2 blue, 3 graphite, 4 green, 5 blue, 6 graphite; &mat=green|blue|graphite tries another. laid out from the
 // measured paper and text boxes, so nothing sits under the words. no parameter = the approved paper card.
 (() => {
-  const Q = new URLSearchParams(location.search), DESK = +Q.get("desk");
+  const Q = new URLSearchParams(location.search), DESK = window.DESK_N;
   if (!(DESK >= 1 && DESK <= 6)) return;
   const card = document.querySelector(".paper"); if (!card) return;
   if (DESK <= 3) card.classList.add("desk", "desk-" + DESK);
@@ -2068,7 +2070,7 @@
    canvas (no svg, no photos: CLAUDE.md §2b), at the card's own size, grain along its long side (so it turns on phones),
    lit from the upper left like the 3D sheet. regenerated when the card's width changes */
 (() => {
-  const k = +new URLSearchParams(location.search).get("desk") - 3, card = document.querySelector(".paper");
+  const k = window.DESK_N - 3, card = document.querySelector(".paper");
   if (!(k >= 1 && k <= 3) || !card) return;
   card.classList.add("slab", "slab-" + k);
   const rng = seed => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
@@ -2213,7 +2215,7 @@ if (card && mark) (async () => {
   const sun = new THREE.DirectionalLight(0xfff2e2, 2.3); sun.position.set(-32, 40, 60); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.bias = -.0005; sun.shadow.normalBias = .02;
   Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 200 }); scene.add(sun, sun.target);
-  const k = +new URLSearchParams(location.search).get("desk");
+  const k = window.DESK_N;
   const sh = ({ 1: [.5, 0x0a0402], 2: [.5, 0x0a0402], 3: [.45, 0x0a0402], 4: [.36, 0x2a1406], 5: [.34, 0x1e1a14], 6: [.38, 0x14181b] })[k] || [.36, 0x1e1a14];
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: sh[0], color: sh[1] }));
   floor.receiveShadow = true; scene.add(floor);
@@ -2800,7 +2802,7 @@ if (mark) {
     sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; sun.shadow.bias = -.003; sun.shadow.normalBias = .05;
     Object.assign(sun.shadow.camera, { left: -3.5, right: 3.5, top: 3, bottom: -3, near: 1, far: 14 }); scene.add(sun);
     // the letter's surface behind the sheet: invisible except for the shadow falling on it
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial(document.querySelector(".paper.slab") ? ({ 1: { opacity: .36, color: 0x2a1406 }, 2: { opacity: .34, color: 0x1e1a14 }, 3: { opacity: .38, color: 0x14181b } })[+new URLSearchParams(location.search).get("desk") - 3] : document.querySelector(".paper.desk") ? { opacity: .5, color: 0x0a0402 } : { opacity: .26, color: 0x3c1405 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 10), new THREE.ShadowMaterial(document.querySelector(".paper.slab") ? ({ 1: { opacity: .36, color: 0x2a1406 }, 2: { opacity: .34, color: 0x1e1a14 }, 3: { opacity: .38, color: 0x14181b } })[window.DESK_N - 3] : document.querySelector(".paper.desk") ? { opacity: .5, color: 0x0a0402 } : { opacity: .26, color: 0x3c1405 }));
     floor.position.z = -.45; floor.receiveShadow = true; scene.add(floor);
 
     const { flat, tris, snaps, creases, spreadRef, vw } = await folded, N = flat.length / 2, T = tris.length / 3;
