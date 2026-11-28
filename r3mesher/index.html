@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R3mesher (r3mesher): remesher for 3D garments and CLO3D exports | postapocapitalism</title>
+<meta name="description" content="R3mesher is a remesher for 3D garments. Clean, even triangle or quad meshes at any density from CLO3D, GLB and OBJ files, without breaking UVs or textures. Normal and topstitch baking. Windows and macOS.">
+<link rel="canonical" href="https://postapocapitalism.org/r3mesher/">
+<meta name="theme-color" content="#7a2e14">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="postapocapitalism">
+<meta property="og:title" content="R3mesher: remesher for 3D garments">
+<meta property="og:description" content="Turn mess into mesh, so things get made and repaired instead of binned.">
+<meta property="og:url" content="https://postapocapitalism.org/r3mesher/">
+<meta property="og:image" content="https://postapocapitalism.org/og/r3mesher.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b9592a'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%231a120d' stroke-width='1.2'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%23fff1d6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=Inter+Tight:wght@300;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/product.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://postapocapitalism.org/r3mesher/#software",
+      "name": "R3mesher",
+      "alternateName": ["r3mesher", "R3 Mesher", "R3MESHER"],
+      "url": "https://postapocapitalism.org/r3mesher/",
+      "image": "https://postapocapitalism.org/og/r3mesher.png",
+      "description": "Remesher for 3D garments. Takes a CLO3D, GLB or OBJ garment and returns a clean, evenly sized triangle or quad mesh at any density, keeping UV seams, textures and every vertex attribute. Bakes normal maps and topstitching.",
+      "applicationCategory": "DesignApplication",
+      "applicationSubCategory": "3D remeshing, retopology",
+      "operatingSystem": "Windows, macOS",
+      "releaseNotes": "Beta",
+      "publisher": { "@id": "https://postapocapitalism.org/#org" },
+      "isRelatedTo": [
+        { "@id": "https://postapocapitalism.org/sc3ne/#software" },
+        { "@id": "https://postapocapitalism.org/cad3t/#software" }
+      ]
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://postapocapitalism.org/#org",
+      "name": "postapocapitalism",
+      "url": "https://postapocapitalism.org/"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "postapocapitalism", "item": "https://postapocapitalism.org/" },
+        { "@type": "ListItem", "position": 2, "name": "R3mesher", "item": "https://postapocapitalism.org/r3mesher/" }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<div class="sky" aria-hidden="true"></div>
+<div class="edge t" aria-hidden="true"></div><div class="edge b" aria-hidden="true"></div>
+<div class="sun" aria-hidden="true"></div>
+
+<div class="wrap nav">
+  <div class="glass">
+    <a href="/" class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="16" cy="16" r="14"/><circle cx="16" cy="16" r="6" stroke-width="1.6"/><circle cx="16" cy="16" r="2.2" fill="currentColor"/></svg>
+      <span class="wm">postapocapitalism</span>
+    </a>
+    <nav class="hud" aria-label="Software">
+      <a href="/sc3ne/">Sc3ne</a>
+      <a href="/r3mesher/" aria-current="page">R3mesher</a>
+      <a href="/cad3t/">Cad3t</a>
+    </nav>
+  </div>
+</div>
+
+<main>
+  <header class="p-hero">
+    <div class="wrap">
+      <div class="p-meta hud">
+        <span>MOD.02</span>
+        <span><i class="dot live"></i><b>Live</b></span>
+        <span class="beta hud">Beta</span>
+        <span>Windows // macOS</span>
+      </div>
+      <h1>R<span class="three">3</span>mesher</h1>
+      <p class="p-kind hud">Remesher // for 3D garments</p>
+      <p class="p-lede">Turn mess into mesh, so things get made and repaired instead of binned.</p>
+      <p class="p-intro">R3mesher takes a garment from CLO3D, or any GLB or OBJ, and gives back a clean, evenly sized triangle or quad mesh at whatever density you ask for, without breaking the texture. It's a desktop app, a command-line tool and a library, all running the same engine.</p>
+      <p class="aka">Also written r3mesher or R3 Mesher. Part of the postapocapitalism software family, with <a href="/sc3ne/">Sc3ne</a> and <a href="/cad3t/">Cad3t</a>.</p>
+
+      <div class="spec glass">
+        <div><span class="k hud">Status</span><span class="v">Beta</span></div>
+        <div><span class="k hud">Runs on</span><span class="v">Windows, macOS, command line</span></div>
+        <div><span class="k hud">Made for</span><span class="v">CLO3D garments, any GLB / OBJ</span></div>
+        <div><span class="k hud">Speed</span><span class="v">1M triangles to 10% in about 3 s</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head"><h2>What it does</h2><div class="hud">06 functions</div></div>
+      <div class="features">
+        <article class="feat glass">
+          <span class="n hud">01 // Density</span>
+          <h3>Any density you ask for</h3>
+          <p>A ratio, a face count or an edge length. A quarter of the triangles, about 20,000, 1 cm edges, or the same count with better-shaped triangles. Tight folds get smaller triangles, flat panels larger ones.</p>
+        </article>
+        <article class="feat glass">
+          <span class="n hud">02 // Texture</span>
+          <h3>The texture survives</h3>
+          <p>UV seams are walls the mesh can't cross, so no triangle straddles one. UVs, normals, tangents and colours are read back from the original surface under every new corner. Materials and everything else in the file pass through untouched.</p>
+        </article>
+        <article class="feat glass">
+          <span class="n hud">03 // Cloth</span>
+          <h3>It knows how clothes are built</h3>
+          <p>Thick cloth stays a closed shell, front and back matching vertex for vertex. Welts, zipper tape, piping and pockets stay on their side of the panel. Buttons, rivets and zipper pulls are left exactly as they are.</p>
+        </article>
+        <article class="feat glass">
+          <span class="n hud">04 // Quads</span>
+          <h3>Quads that follow the pattern</h3>
+          <p>All-quad or quad-dominant output. On CLO's flat-pattern UVs the quads are laid as a square grid along each piece's edges, so they run with the fabric's grain. Written as OBJ, which Blender, Maya, Marvelous and CLO all open.</p>
+        </article>
+        <article class="feat glass">
+          <span class="n hud">05 // Bake</span>
+          <h3>Detail kept in the maps</h3>
+          <p>Bake the original's folds and wrinkles into a normal map on the light mesh. Bake topstitching, often a third of a CLO export's faces, into the colour and normal maps instead of carrying the thread geometry.</p>
+        </article>
+        <article class="feat glass">
+          <span class="n hud">06 // Measure</span>
+          <h3>Numbers, not vibes</h3>
+          <p>Every job reports edge-length evenness, smallest angles, sliver triangles and how far the result strays from the original. In the app, drag a split across the model to compare before and after.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head"><h2>How it works</h2><div class="hud">Drop // pick // compare // export</div></div>
+      <ol class="steps glass">
+        <li><b>Drop a garment in</b><span>A GLB or OBJ from CLO3D, or a <code>.sc3g</code> package from Sc3ne.</span></li>
+        <li><b>Pick a density</b><span>Triangles, quads or mostly quads; per piece if you want, and pick parts to keep exactly as they came.</span></li>
+        <li><b>Compare</b><span>Drag the split between the original and the result, check the quality numbers.</span></li>
+        <li><b>Export</b><span>GLB or OBJ, with baked maps if you asked for them, tuned for Blender, Unreal or the web.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="formats">
+    <div class="wrap">
+      <div class="sec-head"><h2>Formats</h2><div class="hud">In // out</div></div>
+      <div class="formats">
+        <div class="glass"><span class="k hud">Brings in</span>
+          <ul class="chips"><li>GLB / glTF</li><li>OBJ + MTL</li><li>CLO3D exports</li><li>Sc3ne .sc3g</li></ul>
+        </div>
+        <div class="glass"><span class="k hud">Gives back</span>
+          <ul class="chips"><li>GLB</li><li>OBJ + MTL (quads)</li><li>Normal maps (PNG)</li><li>Colour maps with topstitching</li><li>JSON quality report</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <div class="sec-head"><h2>Where it's at</h2><div class="hud">Beta // honest</div></div>
+      <div class="status glass">
+        <ul>
+          <li><b>Works:</b> triangle and quad remeshing, shells, layers, normal and topstitch baking, the desktop app and the command line.</li>
+          <li><b>Not yet:</b> quad loops that run across seams and follow the drape the way hand retopology does. Pattern pieces that arrive unwelded stay unwelded.</li>
+          <li><b>Tested on</b> real CLO3D exports and synthetic tests. Every new garment teaches it something. Not available for download yet.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head"><h2>Questions</h2></div>
+      <div class="faq glass">
+        <details><summary>What is a remesher?</summary><p>A remesher rebuilds a 3D model's surface out of new, well-shaped triangles or quads, at the density you need, while keeping its shape. Simulation exports like CLO3D's are dense and uneven; a remeshed garment is lighter to render, simulate, edit and send.</p></details>
+        <details><summary>Does it only work with CLO3D?</summary><p>It's built around CLO3D garments, but any GLB or OBJ goes in. The garment-specific parts (shells, layers, trims, topstitching) simply have nothing to do on other models.</p></details>
+        <details><summary>Will it break my UVs?</summary><p>No. UV seams are hard constraints, and every attribute is transferred from the original surface at the end. If the UVs can't hold a baked map (CLO's often overlap), a second, clean UV set is made for the bake and the originals stay.</p></details>
+        <details><summary>How do you spell it?</summary><p>R3mesher, with a 3 for the e. r3mesher and R3 Mesher are the same tool.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section id="family">
+    <div class="wrap">
+      <div class="sec-head"><h2>Works with</h2></div>
+      <div class="others">
+        <a class="other glass" href="/sc3ne/"><span class="hud">MOD.01 // Fashion PLM</span><b>Sc3ne</b><p>Track a garment from first sketch to production run, without a six-figure enterprise contract.</p><span class="go hud">Open →</span></a>
+        <a class="other glass" href="/cad3t/"><span class="hud">MOD.03 // CAD</span><b>Cad3t</b><p>Full CAD, from the cabinet to the circuit board inside it, straight to the CNC.</p><span class="go hud">Open →</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="glass bar hud"><span class="id">ID</span><span>Status</span><span class="sp"></span><span style="color:var(--ink-soft)">Operations active</span></div>
+    <div class="meta hud">
+      <span>© 2026 <a href="/">postapocapitalism</a>. Est. later.</span>
+      <span class="links"><a href="/sc3ne/">Sc3ne</a><a href="/r3mesher/">R3mesher</a><a href="/cad3t/">Cad3t</a></span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
