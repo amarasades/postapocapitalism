@@ -2,5 +2,8 @@ User-agent: *
 Allow: /
 Disallow: /dev/
 Disallow: /archive/
+# working notes for whoever edits the site: public on purpose, but not what a search for the products should find
+Disallow: /CLAUDE.md
+Disallow: /README.md
 
 Sitemap: https://postapocapitalism.org/sitemap.xml
